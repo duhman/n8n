@@ -111,6 +111,7 @@ pnpm start:tunnel    # Start with tunnel for webhook testing
 ## Debugging
 
 VS Code launch configurations available for:
+
 - `Launch n8n with debug` - Full application debugging
 - `Launch n8n CLI with debug` - CLI-specific debugging
 - `Attach to running n8n` - Attach to existing process
@@ -135,6 +136,7 @@ VS Code launch configurations available for:
 A production-ready Docker setup with PostgreSQL is available in `/n8n-production/`:
 
 ### Production Setup Commands
+
 ```bash
 # Navigate to production directory
 cd n8n-production
@@ -151,6 +153,7 @@ docker compose up -d
 ```
 
 ### Production Features
+
 - **PostgreSQL database** for data persistence and performance
 - **Automated backups** with `./backup.sh` script
 - **Secure configuration** with generated encryption keys
@@ -159,6 +162,7 @@ docker compose up -d
 - **Resource limits** and health checks for stability
 
 ### Production Files
+
 - `docker-compose.yml` - Main orchestration configuration
 - `.env` - Environment variables (git-ignored)
 - `.env.example` - Configuration template
@@ -168,23 +172,27 @@ docker compose up -d
 - `README.md` - Complete production documentation
 
 ### Important Environment Variables
+
 - `N8N_ENCRYPTION_KEY` - Must be consistent across deployments
 - `POSTGRES_PASSWORD` - Strong database password
 - `N8N_HOST` - Your domain for webhooks
 - `WEBHOOK_URL` - Full webhook URL for external services
 
 ### Docker Commands (if Docker not in PATH)
+
 Use full path: `/Applications/Docker.app/Contents/Resources/bin/docker`
 
 ## Fork and Upstream Sync
 
 This repository is a fork of the original n8n repository. Git remotes are configured as:
+
 - **origin**: `https://github.com/duhman/n8n.git` (this fork)
 - **upstream**: `https://github.com/n8n-io/n8n.git` (original n8n repo)
 
 ### Regular Sync Commands
 
 **Quick Sync** (when no conflicts expected):
+
 ```bash
 git fetch upstream
 git merge upstream/master
@@ -192,6 +200,7 @@ git push origin master
 ```
 
 **Safe Sync with Review**:
+
 ```bash
 git fetch upstream
 git log --oneline HEAD..upstream/master  # Review changes
@@ -200,6 +209,7 @@ git push origin master                   # Push to your fork
 ```
 
 **Alternative with Rebase** (cleaner history):
+
 ```bash
 git fetch upstream
 git rebase upstream/master
@@ -207,12 +217,15 @@ git push origin master
 ```
 
 ### Production Setup Protection
+
 Your `/n8n-production/` directory is safe from conflicts because:
+
 - Isolated custom directory not present in upstream
 - Independent Docker configuration
 - Custom documentation tracked separately
 
 ### Maintenance Schedule
+
 - **Weekly/Monthly**: Sync with upstream for updates
 - **After Sync**: Test production setup with `docker compose restart`
 - **On Conflicts**: Usually in README.md or docs - keep your production changes
@@ -230,3 +243,18 @@ See `SYNC_UPSTREAM.md` for detailed workflow, conflict resolution, and automatio
   - Enhancing performance and scalability
   - Maintaining high code quality and test coverage
   - Production-ready deployment capabilities
+
+## Recent Actions and Decisions
+
+- Implemented a comprehensive production deployment setup with Docker and PostgreSQL
+- Explored strategies for syncing with the upstream n8n repository
+- Focused on creating a flexible and extensible workflow automation platform
+- Prioritized code quality, testing, and developer experience in the project
+
+## Initial Codebase Analysis and Understanding
+
+- Thoroughly analyzed the n8n monorepo architecture and development workflows
+- Recognized the modular design with separate packages for core functionality
+- Identified key architectural components like nodes system, frontend, and backend
+- Understood the importance of TypeScript, Vue.js, and the plugin-based node integration system
+- Appreciated the comprehensive testing and development infrastructure
