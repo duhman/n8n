@@ -183,19 +183,41 @@ This repository is a fork of the original n8n repository. Git remotes are config
 - **upstream**: `https://github.com/n8n-io/n8n.git` (original n8n repo)
 
 ### Regular Sync Commands
+
+**Quick Sync** (when no conflicts expected):
 ```bash
-# Fetch and merge upstream changes
 git fetch upstream
 git merge upstream/master
 git push origin master
+```
 
-# Or use rebase for cleaner history
+**Safe Sync with Review**:
+```bash
+git fetch upstream
+git log --oneline HEAD..upstream/master  # Review changes
+git merge upstream/master                 # Merge
+git push origin master                   # Push to your fork
+```
+
+**Alternative with Rebase** (cleaner history):
+```bash
 git fetch upstream
 git rebase upstream/master
 git push origin master
 ```
 
-See `SYNC_UPSTREAM.md` for detailed sync workflow and conflict resolution.
+### Production Setup Protection
+Your `/n8n-production/` directory is safe from conflicts because:
+- Isolated custom directory not present in upstream
+- Independent Docker configuration
+- Custom documentation tracked separately
+
+### Maintenance Schedule
+- **Weekly/Monthly**: Sync with upstream for updates
+- **After Sync**: Test production setup with `docker compose restart`
+- **On Conflicts**: Usually in README.md or docs - keep your production changes
+
+See `SYNC_UPSTREAM.md` for detailed workflow, conflict resolution, and automation scripts.
 
 ## Project Context and Memory
 
