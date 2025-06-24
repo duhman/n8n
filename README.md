@@ -31,6 +31,18 @@ docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n
 
 Access the editor at http://localhost:5678
 
+## Production Deployment
+
+For production environments with data persistence and PostgreSQL:
+
+```bash
+cd n8n-production
+./setup.sh
+docker compose up -d
+```
+
+See [`n8n-production/README.md`](./n8n-production/README.md) for complete production setup documentation.
+
 ## Resources
 
 - 📚 [Documentation](https://docs.n8n.io)

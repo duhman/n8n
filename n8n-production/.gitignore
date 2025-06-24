@@ -1,0 +1,60 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Data directories
+data/
+local-files/
+
+# Backup files
+backups/
+*.tar.gz
+*.sql
+*.sql.gz
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Docker override files (for local development)
+docker-compose.override.yml
+
+# Certificates (if using SSL)
+certs/
+*.pem
+*.crt
+*.key
+
+# Custom hooks or scripts
+hooks.js
+custom-scripts/
+
+# Node modules (if any local scripts)
+node_modules/
+
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+
+# Terraform state (if using IaC)
+*.tfstate
+*.tfstate.backup
+.terraform/
