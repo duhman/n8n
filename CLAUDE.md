@@ -176,6 +176,27 @@ docker compose up -d
 ### Docker Commands (if Docker not in PATH)
 Use full path: `/Applications/Docker.app/Contents/Resources/bin/docker`
 
+## Fork and Upstream Sync
+
+This repository is a fork of the original n8n repository. Git remotes are configured as:
+- **origin**: `https://github.com/duhman/n8n.git` (this fork)
+- **upstream**: `https://github.com/n8n-io/n8n.git` (original n8n repo)
+
+### Regular Sync Commands
+```bash
+# Fetch and merge upstream changes
+git fetch upstream
+git merge upstream/master
+git push origin master
+
+# Or use rebase for cleaner history
+git fetch upstream
+git rebase upstream/master
+git push origin master
+```
+
+See `SYNC_UPSTREAM.md` for detailed sync workflow and conflict resolution.
+
 ## Project Context and Memory
 
 - We are working on n8n, an open-source workflow automation platform
