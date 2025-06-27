@@ -1,0 +1,388 @@
+{
+  "name": "Notion Cloudflare to Slack (Enhanced)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-project-done-cf",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook-cloudflare",
+      "name": "Cloudflare Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "notion-project-done-cf"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validate-source",
+              "leftValue": "={{ $json.notionId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            },
+            {
+              "id": "validate-project-name", 
+              "leftValue": "={{ $json.projectName }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combineOperation": "all"
+        }
+      },
+      "id": "validate-data",
+      "name": "Validate Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "projectName",
+              "value": "={{ $json.projectName }}"
+            },
+            {
+              "name": "projectDescription", 
+              "value": "={{ $json.projectDescription || 'No description provided' }}"
+            },
+            {
+              "name": "completionDate",
+              "value": "={{ $json.completionDate || $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "teamMembers",
+              "value": "={{ $json.teamMembers ? $json.teamMembers.join(', ') : 'Not specified' }}"
+            },
+            {
+              "name": "deliverables",
+              "value": "={{ $json.deliverables ? $json.deliverables.join(', ') : 'Not specified' }}"
+            },
+            {
+              "name": "priority",
+              "value": "={{ $json.priority || 'medium' }}"
+            },
+            {
+              "name": "category",
+              "value": "={{ $json.category || 'general' }}"
+            },
+            {
+              "name": "notionUrl",
+              "value": "={{ $json.notionUrl || 'https://notion.so/' + $json.notionId }}"
+            }
+          ]
+        }
+      },
+      "id": "format-data",
+      "name": "Format Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chatCompletion", 
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a project manager assistant specialized in creating engaging project completion announcements. Create professional, celebratory Slack messages that highlight achievements and team contributions. Use appropriate emojis and structure the message for maximum team engagement."
+            },
+            {
+              "role": "user",
+              "content": "=🎉 PROJECT COMPLETED 🎉\n\n**Project:** {{ $json.projectName }}\n**Description:** {{ $json.projectDescription }}\n**Completed:** {{ $json.completionDate }}\n**Team:** {{ $json.teamMembers }}\n**Deliverables:** {{ $json.deliverables }}\n**Priority:** {{ $json.priority }}\n**Category:** {{ $json.category }}\n**Notion Link:** {{ $json.notionUrl }}\n\nPlease create an engaging Slack announcement that celebrates this completion and acknowledges the team's hard work. Include relevant emojis and structure it professionally for a team channel."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 600
+        }
+      },
+      "id": "openai-enhanced",
+      "name": "OpenAI Enhanced Summary",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        200
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "value": "YOUR_CHANNEL_ID",
+          "__rl": true,
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": "🎉 Project Completed!",
+                "emoji": true
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ $json.message.content }}"
+              }
+            },
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Priority:*\n{{ $('Format Data').item.json.priority }}"
+                },
+                {
+                  "type": "mrkdwn", 
+                  "text": "*Category:*\n{{ $('Format Data').item.json.category }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Completed:*\n{{ $('Format Data').item.json.completionDate }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Team:*\n{{ $('Format Data').item.json.teamMembers }}"
+                }
+              ]
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "View in Notion"
+                  },
+                  "url": "={{ $('Format Data').item.json.notionUrl }}",
+                  "action_id": "view_notion"
+                }
+              ]
+            },
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "_Automated via Cloudflare Workers + n8n • {{ $now.format('yyyy-MM-dd HH:mm') }}_"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "slack-enhanced", 
+      "name": "Send Enhanced Slack Message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-credentials",
+          "name": "Slack OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "response",
+              "value": "=✅ Successfully processed project completion: {{ $('Format Data').item.json.projectName }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "processedBy",
+              "value": "Cloudflare Worker + n8n"
+            }
+          ]
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "Invalid webhook data - missing required fields"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "received_data",
+              "value": "={{ JSON.stringify($json) }}"
+            }
+          ]
+        }
+      },
+      "id": "error-response",
+      "name": "Error Response", 
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Cloudflare Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Data": {
+      "main": [
+        [
+          {
+            "node": "Format Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Enhanced Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Enhanced Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Enhanced Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Enhanced Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": {
+      "errorWorkflow": "",
+      "continueOnFail": false
+    }
+  },
+  "versionId": "01234567-89ab-cdef-0123-456789abcdef",
+  "id": "notion-cloudflare-to-slack-enhanced",
+  "meta": {
+    "templateId": "notion-cloudflare-to-slack-enhanced"
+  },
+  "tags": [
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare"
+    },
+    {
+      "id": "notion",
+      "name": "Notion"
+    },
+    {
+      "id": "slack",
+      "name": "Slack"
+    }
+  ]
+}

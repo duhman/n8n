@@ -232,6 +232,110 @@ Your `/n8n-production/` directory is safe from conflicts because:
 
 See `SYNC_UPSTREAM.md` for detailed workflow, conflict resolution, and automation scripts.
 
+## Hetzner Cloud Deployment
+
+A complete automated deployment solution for Hetzner Cloud is available in `/hetzner-setup/`:
+
+### Deployment Process
+
+```bash
+# On fresh Hetzner Ubuntu server
+git clone https://github.com/duhman/n8n.git /opt/setup
+cd /opt/setup/hetzner-setup
+chmod +x *.sh
+
+# 1. Initial server setup (Docker, firewall, security)
+./initial-setup.sh
+
+# 2. Deploy n8n with production configuration
+./deploy-n8n.sh
+
+# 3. Configure DNS A record pointing to server IP
+
+# 4. Add SSL certificate and security hardening
+./secure-server.sh
+
+# 5. Set up automated backups
+./backup-setup.sh
+```
+
+### Hetzner Features
+
+- **Complete automation**: One-command server preparation and deployment
+- **SSL/TLS**: Automatic Let's Encrypt certificate with auto-renewal
+- **Security hardening**: UFW firewall, fail2ban, SSH key-only authentication
+- **Monitoring**: Log analysis, intrusion detection, security checks
+- **Backups**: Automated daily backups with Hetzner Storage Box integration
+- **Production ready**: PostgreSQL, Nginx reverse proxy, systemd services
+
+### Cost: €5.83-11.27/month for VPS + €3.36/month for Storage Box
+
+## n8n API Integration
+
+### API Authentication
+
+n8n provides a REST API for programmatic workflow management:
+
+```bash
+# API endpoint: https://your-domain.com/api/v1
+# Authentication: X-N8N-API-KEY header
+
+# Example API calls
+curl -X GET https://n8n.whatisspeed.com/api/v1/workflows \
+  -H "X-N8N-API-KEY: your-api-key-here"
+```
+
+### Common API Operations
+
+**Workflow Management:**
+- `GET /api/v1/workflows` - List all workflows
+- `POST /api/v1/workflows` - Create new workflow
+- `PUT /api/v1/workflows/{id}` - Update workflow
+- `DELETE /api/v1/workflows/{id}` - Delete workflow
+- `POST /api/v1/workflows/{id}/execute` - Execute workflow
+
+**Credentials Management:**
+- `GET /api/v1/credentials` - List credentials
+- `POST /api/v1/credentials` - Create credential
+
+**Executions:**
+- `GET /api/v1/executions` - List executions
+- `GET /api/v1/executions/{id}` - Get execution details
+
+### API Key Generation
+
+1. Login to n8n web interface
+2. Go to **Settings** → **API Keys**
+3. Create new API key with appropriate permissions
+4. Use in requests via `X-N8N-API-KEY` header
+
+### Python Integration Example
+
+```python
+import requests
+
+class N8nAPI:
+    def __init__(self, base_url, api_key):
+        self.base_url = base_url
+        self.headers = {
+            "X-N8N-API-KEY": api_key,
+            "Content-Type": "application/json"
+        }
+    
+    def list_workflows(self):
+        response = requests.get(f"{self.base_url}/api/v1/workflows", headers=self.headers)
+        return response.json()
+    
+    def execute_workflow(self, workflow_id, data=None):
+        url = f"{self.base_url}/api/v1/workflows/{workflow_id}/execute"
+        response = requests.post(url, headers=self.headers, json=data or {})
+        return response.json()
+
+# Usage
+api = N8nAPI("https://n8n.whatisspeed.com", "your-api-key")
+workflows = api.list_workflows()
+```
+
 ## Project Context and Memory
 
 - We are working on n8n, an open-source workflow automation platform
@@ -247,9 +351,12 @@ See `SYNC_UPSTREAM.md` for detailed workflow, conflict resolution, and automatio
 ## Recent Actions and Decisions
 
 - Implemented a comprehensive production deployment setup with Docker and PostgreSQL
+- Successfully deployed n8n on Hetzner Cloud with complete automation scripts
+- Created Cloudflare Containers deployment option for serverless hosting
 - Explored strategies for syncing with the upstream n8n repository
 - Focused on creating a flexible and extensible workflow automation platform
 - Prioritized code quality, testing, and developer experience in the project
+- Successfully configured production instance with SSL, security hardening, and backups
 
 ## Initial Codebase Analysis and Understanding
 

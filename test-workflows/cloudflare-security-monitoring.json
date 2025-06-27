@@ -1,0 +1,295 @@
+{
+  "name": "Cloudflare Security Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "zone",
+        "operation": "list"
+      },
+      "id": "get-zones",
+      "name": "Get Zones",
+      "type": "n8n-nodes-base.cloudflare",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ],
+      "credentials": {
+        "cloudflareApi": {
+          "id": "cloudflare-credentials",
+          "name": "Cloudflare API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.cloudflare.com/client/v4/zones/{{ $json.id }}/analytics/dashboard",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "since",
+              "value": "={{ $now.minus({minutes: 15}).toISO() }}"
+            },
+            {
+              "name": "until", 
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "get-analytics",
+      "name": "Get Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cloudflare-auth",
+          "name": "Cloudflare Auth Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict" 
+          },
+          "conditions": [
+            {
+              "id": "high-threat-score",
+              "leftValue": "={{ $json.result.totals.threats.all }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "check-threats",
+      "name": "Check High Threats",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "value": "YOUR_SECURITY_CHANNEL_ID",
+          "__rl": true,
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": "🚨 Security Alert",
+                "emoji": true
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*High threat activity detected*\n\n*Zone:* {{ $('Get Zones').item.json.name }}\n*Threats:* {{ $json.result.totals.threats.all }}\n*Time:* {{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+              }
+            },
+            {
+              "type": "section",
+              "fields": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Total Requests:*\n{{ $json.result.totals.requests.all }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Bandwidth:*\n{{ ($json.result.totals.bandwidth.all / 1024 / 1024).toFixed(2) }} MB"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Unique Visitors:*\n{{ $json.result.totals.uniques.all }}"
+                },
+                {
+                  "type": "mrkdwn",
+                  "text": "*Page Views:*\n{{ $json.result.totals.pageviews.all }}"
+                }
+              ]
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "View Dashboard"
+                  },
+                  "url": "=https://dash.cloudflare.com/{{ $('Get Zones').item.json.account.id }}/{{ $('Get Zones').item.json.name }}/analytics",
+                  "action_id": "view_dashboard"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "security-alert",
+      "name": "Send Security Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        200
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-credentials",
+          "name": "Slack OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "No security alerts at this time"
+            },
+            {
+              "name": "checked_at",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "no-alerts",
+      "name": "No Alerts",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1000,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Zones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Zones": {
+      "main": [
+        [
+          {
+            "node": "Get Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Analytics": {
+      "main": [
+        [
+          {
+            "node": "Check High Threats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check High Threats": {
+      "main": [
+        [
+          {
+            "node": "Send Security Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "America/New_York"
+  },
+  "versionId": "01234567-89ab-cdef-0123-456789abcdef",
+  "id": "cloudflare-security-monitoring",
+  "meta": {
+    "templateId": "cloudflare-security-monitoring"
+  },
+  "tags": [
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare"
+    },
+    {
+      "id": "security",
+      "name": "Security"
+    },
+    {
+      "id": "monitoring",
+      "name": "Monitoring"
+    }
+  ]
+}

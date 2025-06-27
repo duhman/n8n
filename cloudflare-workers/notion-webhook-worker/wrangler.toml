@@ -1,0 +1,33 @@
+name = "notion-webhook-worker"
+main = "src/index.js"
+compatibility_date = "2024-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# Worker configuration
+[env.production]
+name = "notion-webhook-worker-prod"
+
+[env.staging]
+name = "notion-webhook-worker-staging"
+
+[env.development]
+name = "notion-webhook-worker-dev"
+
+# Environment variables (these should be set via wrangler secret)
+# Run: wrangler secret put N8N_WEBHOOK_URL
+# Run: wrangler secret put N8N_API_KEY
+# Run: wrangler secret put NOTION_WEBHOOK_SECRET
+
+# Custom domains (configure after deployment)
+# routes = [
+#   { pattern = "notion-webhook.yourdomain.com", custom_domain = true }
+# ]
+
+# Rate limiting
+[limits]
+cpu_ms = 50
+memory_mb = 128
+
+# Cron triggers (optional - for health checks)
+# [triggers.crons]
+# - cron = "*/5 * * * *"

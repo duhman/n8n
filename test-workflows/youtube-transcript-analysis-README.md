@@ -31,12 +31,14 @@ In the **Channel Config** node, update these values:
 You'll need to configure these credentials in n8n:
 
 #### OpenAI Credentials
+
 - Go to n8n Settings → Credentials → Add Credential
 - Select "OpenAI"
 - Add your OpenAI API key
 - The workflow uses GPT-4o-mini (cost-effective for summaries)
 
-#### Slack Credentials  
+#### Slack Credentials
+
 - Go to n8n Settings → Credentials → Add Credential
 - Select "Slack OAuth2 API"
 - Follow the OAuth setup process or use a Bot Token
@@ -55,7 +57,7 @@ The RSS trigger is set to check every 15 minutes. You can modify this in the **R
 Modify the analysis prompt in **Channel Config** to focus on specific aspects:
 
 - Technical content: Focus on code examples, tools mentioned
-- Educational content: Emphasize learning objectives, key concepts  
+- Educational content: Emphasize learning objectives, key concepts
 - Business content: Highlight insights, actionable advice
 - Entertainment: Focus on themes, memorable moments
 
@@ -73,28 +75,32 @@ The workflow sends rich-formatted Slack messages including:
 1. **Monitoring**: RSS feed is polled at regular intervals for new video entries
 2. **Processing**: When a new video is detected, the video ID is extracted
 3. **Transcript Retrieval**: Uses `youtubetranscript.com` API to get video transcript
-4. **Data Validation**: Ensures transcript is meaningful (>50 characters) 
+4. **Data Validation**: Ensures transcript is meaningful (>50 characters)
 5. **AI Analysis**: Sends transcript to OpenAI with custom prompt for analysis
 6. **Notification**: Formatted summary is sent to your Slack DM
 
 ## Troubleshooting
 
 ### No Transcripts Available
+
 - Not all YouTube videos have transcripts (auto-generated or manual)
 - The transcript API may not work for very new videos
 - Private or restricted videos won't have accessible transcripts
 
 ### Workflow Not Triggering
+
 - Verify the YouTube channel ID is correct
 - Check that the channel regularly publishes new content
 - Ensure RSS feed URL is accessible: `https://www.youtube.com/feeds/videos.xml?channel_id=YOUR_CHANNEL_ID`
 
 ### OpenAI Errors
+
 - Verify API key is valid and has sufficient credits
 - Check if transcript is too long (>4000 tokens) - may need chunking
 - Ensure the model (gpt-4o-mini) is accessible with your API key
 
 ### Slack Delivery Issues
+
 - Verify Slack credentials have correct scopes
 - Ensure your username format is correct (`@username` or user ID)
 - Check that the bot/app has permission to send you DMs
@@ -122,8 +128,9 @@ The workflow sends rich-formatted Slack messages including:
 ## Support
 
 For issues with the workflow:
+
 1. Check n8n execution logs for error details
-2. Test each node individually to isolate issues  
+2. Test each node individually to isolate issues
 3. Verify all credentials are properly configured
 4. Ensure external APIs (transcript service) are accessible
 

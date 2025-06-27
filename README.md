@@ -33,6 +33,8 @@ Access the editor at http://localhost:5678
 
 ## Production Deployment
 
+### Local/VPS Production Setup
+
 For production environments with data persistence and PostgreSQL:
 
 ```bash
@@ -42,6 +44,34 @@ docker compose up -d
 ```
 
 See [`n8n-production/README.md`](./n8n-production/README.md) for complete production setup documentation.
+
+### Cloud Deployment - Hetzner
+
+For automated deployment on Hetzner Cloud with SSL, security hardening, and backups:
+
+```bash
+# On your Hetzner server
+git clone https://github.com/duhman/n8n.git /opt/setup
+cd /opt/setup/hetzner-setup
+chmod +x *.sh
+./initial-setup.sh    # Prepare server
+./deploy-n8n.sh       # Deploy n8n
+./secure-server.sh     # Add SSL & security
+./backup-setup.sh      # Configure backups
+```
+
+See [`hetzner-setup/README.md`](./hetzner-setup/README.md) for complete Hetzner deployment guide.
+
+### Cloudflare Containers (Beta)
+
+For serverless deployment on Cloudflare's global edge network:
+
+```bash
+cd cloudflare-containers
+./deploy.sh
+```
+
+See [`cloudflare-containers/`](./cloudflare-containers/) for serverless deployment options.
 
 ## Resources
 

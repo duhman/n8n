@@ -1,0 +1,154 @@
+{
+  "name": "Cloudflare Automation Suite",
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "zone",
+        "operation": "list"
+      },
+      "id": "list-zones",
+      "name": "List Zones",
+      "type": "n8n-nodes-base.cloudflare",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "credentials": {
+        "cloudflareApi": {
+          "id": "cloudflare-credentials",
+          "name": "Cloudflare API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "dnsRecord",
+        "operation": "create",
+        "zoneId": "={{ $json.id }}",
+        "type": "A",
+        "name": "api",
+        "content": "192.168.1.100",
+        "ttl": 300
+      },
+      "id": "create-dns-record",
+      "name": "Create DNS Record",
+      "type": "n8n-nodes-base.cloudflare",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ],
+      "credentials": {
+        "cloudflareApi": {
+          "id": "cloudflare-credentials",
+          "name": "Cloudflare API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "cache",
+        "operation": "purge",
+        "zoneId": "={{ $('List Zones').item.json.id }}",
+        "purgeEverything": true
+      },
+      "id": "purge-cache",
+      "name": "Purge Cache",
+      "type": "n8n-nodes-base.cloudflare",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ],
+      "credentials": {
+        "cloudflareApi": {
+          "id": "cloudflare-credentials",
+          "name": "Cloudflare API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "value": "YOUR_CHANNEL_ID",
+          "__rl": true,
+          "mode": "id"
+        },
+        "text": "=🔄 Cloudflare automation completed:\n• DNS record created for {{ $('Create DNS Record').item.json.name }}\n• Cache purged for zone {{ $('List Zones').item.json.name }}\n• Completed at {{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+      },
+      "id": "notify-completion",
+      "name": "Notify Completion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        300
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-credentials",
+          "name": "Slack OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "List Zones": {
+      "main": [
+        [
+          {
+            "node": "Create DNS Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create DNS Record": {
+      "main": [
+        [
+          {
+            "node": "Purge Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purge Cache": {
+      "main": [
+        [
+          {
+            "node": "Notify Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01234567-89ab-cdef-0123-456789abcdef",
+  "id": "cloudflare-automation-suite",
+  "meta": {
+    "templateId": "cloudflare-automation-suite"
+  },
+  "tags": [
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare"
+    },
+    {
+      "id": "automation",
+      "name": "Automation"
+    }
+  ]
+}

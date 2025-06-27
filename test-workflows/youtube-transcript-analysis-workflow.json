@@ -7,8 +7,8 @@
         "pollTimes": {
           "item": [
             {
-              "mode": "everyMinute",
-              "minute": 15
+              "mode": "everyX",
+              "value": 15
             }
           ]
         }
@@ -66,7 +66,8 @@
     },
     {
       "parameters": {
-        "url": "=https://youtubetranscript.com/?server_vid2={{$json.video_id}}",
+        "url": "=https://www.youtube-transcript.io/api?video_id={{$json.video_id}}",
+        "method": "GET",
         "options": {
           "timeout": 30000,
           "retry": {
@@ -93,28 +94,18 @@
           "value": "gpt-4o-mini",
           "mode": "list"
         },
-        "messages": {
-          "messages": [
-            {
-              "role": "system",
-              "content": "=You are a helpful AI assistant that analyzes YouTube video transcripts and provides concise, actionable summaries."
-            },
-            {
-              "role": "user",
-              "content": "=Video Title: {{$node[\"Extract Video ID\"].json[\"video_title\"]}}\nVideo URL: {{$node[\"Extract Video ID\"].json[\"video_url\"]}}\nPublished: {{$node[\"Extract Video ID\"].json[\"published_date\"]}}\n\nTranscript:\n{{$json[\"data\"]}}\n\n{{$node[\"Channel Config\"].json[\"analysis_prompt\"]}}"
-            }
-          ]
-        },
         "options": {
+          "systemPromptTemplate": "=You are a helpful AI assistant that analyzes YouTube video transcripts and provides concise, actionable summaries.",
           "temperature": 0.3,
           "maxTokens": 500
         },
+        "prompt": "=Video Title: {{$node[\"Extract Video ID\"].json[\"video_title\"]}}\nVideo URL: {{$node[\"Extract Video ID\"].json[\"video_url\"]}}\nPublished: {{$node[\"Extract Video ID\"].json[\"published_date\"]}}\n\nTranscript:\n{{$json[\"data\"]}}\n\n{{$node[\"Channel Config\"].json[\"analysis_prompt\"]}}",
         "simplifyOutput": true
       },
       "id": "analyze-transcript-node",
       "name": "Analyze with OpenAI",
       "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 1.4,
+      "typeVersion": 1.8,
       "position": [
         520,
         300
@@ -216,6 +207,42 @@
         160,
         300
       ]
+    },
+    {
+      "parameters": {
+        "url": "=https://youtubetranscript.com/?server_vid2={{$json.video_id}}",
+        "method": "GET",
+        "options": {
+          "timeout": 20000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 2
+          }
+        }
+      },
+      "id": "fallback-transcript-node",
+      "name": "Fallback Transcript Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-transcript-sources",
+      "name": "Merge Transcript Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        380,
+        300
+      ]
     }
   ],
   "pinData": {},
@@ -254,6 +281,28 @@
       ]
     },
     "Get Video Transcript": {
+      "main": [
+        [
+          {
+            "node": "Merge Transcript Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Transcript Service": {
+      "main": [
+        [
+          {
+            "node": "Merge Transcript Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Transcript Sources": {
       "main": [
         [
           {

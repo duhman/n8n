@@ -1,0 +1,180 @@
+{
+  "name": "Roadmap Announcement Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-roadmap-webhook",
+        "responseMode": "onReceived",
+        "responseData": "default",
+        "options": {
+          "noResponseBody": false
+        },
+        "responseHeaders": {
+          "entries": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "name": "Notion Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notion-roadmap-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "page.content_updated",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.page?.properties?.Status?.status?.name }}",
+              "rightValue": "Done",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "all"
+        },
+        "options": {}
+      },
+      "name": "Check if Done Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "get",
+        "pageId": "={{ $json.page.id }}",
+        "options": {}
+      },
+      "name": "Get Full Page Data",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [650, 220],
+      "credentials": {
+        "notionApi": {
+          "id": "your-notion-credentials-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and transform Notion page data for Slack message\nconst pageData = $input.first().json;\n\n// Helper function to extract text from rich text array\nfunction extractRichText(richTextArray) {\n  if (!richTextArray || !Array.isArray(richTextArray)) return '';\n  return richTextArray.map(item => item.plain_text || item.text?.content || '').join('');\n}\n\n// Helper function to extract people mentions and convert to Slack handles\nfunction extractContributors(richTextArray) {\n  if (!richTextArray || !Array.isArray(richTextArray)) return [];\n  \n  const contributors = [];\n  richTextArray.forEach(item => {\n    if (item.type === 'mention' && item.mention?.type === 'user') {\n      // Map Notion user to Slack handle - you'll need to customize this mapping\n      const userName = item.mention.user?.name || 'Unknown';\n      contributors.push({\n        name: userName,\n        slack_handle: `@${userName.toLowerCase().replace(/\\s+/g, '.')}`\n      });\n    }\n  });\n  \n  return contributors;\n}\n\n// Helper function to extract value points from multi-line text\nfunction extractValuePoints(text) {\n  if (!text) return [];\n  \n  // Split by line breaks and filter out empty lines\n  const lines = text.split('\\n').filter(line => line.trim() !== '');\n  \n  // Remove bullet points or numbers if present\n  return lines.map(line => line.replace(/^[•\\-\\d\\.\\s]+/, '').trim()).filter(line => line !== '');\n}\n\n// Extract data from Notion page properties\nconst properties = pageData.properties || {};\n\n// Extract delivery title (assuming it's the page title)\nconst deliveryTitle = extractRichText(properties.Name?.title || properties.Title?.title || []);\n\n// Extract target audience (assuming there's a 'Target Audience' property)\nconst targetAudience = extractRichText(properties['Target Audience']?.rich_text || properties.Audience?.rich_text || []) || 'All users';\n\n// Extract contributors (assuming there's a 'Contributors' property with user mentions)\nconst contributors = extractContributors(properties.Contributors?.rich_text || []);\n\n// Extract value points (assuming there's a 'Value Points' or 'Description' property)\nconst valueText = extractRichText(properties['Value Points']?.rich_text || properties.Description?.rich_text || properties.Value?.rich_text || []);\nconst valuePoints = extractValuePoints(valueText);\n\n// Create the delivery URL (Notion page URL)\nconst deliveryUrl = pageData.url || `https://notion.so/${pageData.id.replace(/-/g, '')}`;\n\n// Return formatted data for Slack\nreturn {\n  delivery_title: deliveryTitle || 'New Delivery',\n  delivery_url: deliveryUrl,\n  target_audience: targetAudience,\n  contributors: contributors,\n  value_points: valuePoints.length > 0 ? valuePoints : ['Improved user experience'],\n  page_id: pageData.id,\n  event_timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Transform Notion Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 220]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "#delivery-announcements",
+        "text": "📯 **Delivery Announcement** 📯\n\n🎯 **What we're delivering today:** [{{ $json.delivery_title }}]({{ $json.delivery_url }})\n\n👥 **Who is it for:** {{ $json.target_audience }}\n\n🤝 **Who contributed:** {{ $json.contributors.length > 0 ? $json.contributors.map(c => c.slack_handle).join(' ') : 'Team effort' }}\n\n💎 **Value delivered:**\n{{ $json.value_points.map((point, index) => `${index + 1}. ${point}`).join('\n') }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1050, 220],
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-credentials-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"status\": \"success\", \"message\": \"Webhook received and processed\" }"
+      },
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [450, 420]
+    }
+  ],
+  "connections": {
+    "Notion Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check if Done Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Done Status": {
+      "main": [
+        [
+          {
+            "node": "Get Full Page Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Full Page Data": {
+      "main": [
+        [
+          {
+            "node": "Transform Notion Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Notion Data": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1"
+}

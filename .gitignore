@@ -26,3 +26,16 @@ build-storybook.log
 junit.xml
 test-results.json
 *.0x
+
+# System files
+*~
+*.bak
+*.log
+
+# Production data
+n8n-production/data/
+n8n-production/backups/
+
+# Temporary directories
+.cache/
+.temp/

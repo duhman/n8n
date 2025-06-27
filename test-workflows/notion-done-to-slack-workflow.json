@@ -1,0 +1,184 @@
+{
+  "name": "Notion Done Projects to Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-project-done",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-notion",
+      "name": "Notion Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "notion-project-done"
+    },
+    {
+      "parameters": {
+        "resource": "chatCompletion",
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a project manager assistant. Analyze the completed project details and create a concise, professional summary for the team. Include key achievements, timeline, and any notable outcomes. Format the response for Slack with appropriate emojis and structure."
+            },
+            {
+              "role": "user", 
+              "content": "=Project Name: {{ $json.projectName }}\n\nProject Description: {{ $json.projectDescription }}\n\nCompletion Date: {{ $json.completionDate }}\n\nTeam Members: {{ $json.teamMembers }}\n\nKey Deliverables: {{ $json.deliverables }}\n\nPlease create a Slack-formatted announcement for this completed project."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        }
+      },
+      "id": "openai-processor",
+      "name": "OpenAI Process",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credentials",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "value": "YOUR_CHANNEL_ID",
+          "__rl": true,
+          "mode": "id"
+        },
+        "text": "={{ $json.message.content }}",
+        "otherOptions": {
+          "mrkdwn": true,
+          "unfurl_links": false,
+          "unfurl_media": false
+        },
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "header",
+              "text": {
+                "type": "plain_text",
+                "text": "🎉 Project Completed!",
+                "emoji": true
+              }
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "={{ $json.message.content }}"
+              }
+            },
+            {
+              "type": "context",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "_Automated notification from Notion_"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "slack-notification",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        650,
+        300
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-credentials",
+          "name": "Slack OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "response",
+              "value": "=✅ Successfully posted project completion notification to Slack!"
+            }
+          ]
+        }
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Notion Webhook": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Process": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01234567-89ab-cdef-0123-456789abcdef",
+  "id": "notion-done-to-slack",
+  "meta": {
+    "templateId": "notion-done-to-slack"
+  },
+  "tags": []
+}

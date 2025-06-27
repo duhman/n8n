@@ -1,0 +1,33 @@
+{
+  "name": "notion-webhook-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for processing Notion webhooks and forwarding to n8n",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "cloudflare",
+    "worker",
+    "notion",
+    "webhook",
+    "n8n",
+    "automation"
+  ],
+  "author": "n8n Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "wrangler": "^3.60.3",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
