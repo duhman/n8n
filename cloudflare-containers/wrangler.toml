@@ -1,0 +1,51 @@
+name = "n8n-app"
+compatibility_date = "2024-12-20"
+
+# Cloudflare Containers configuration for n8n
+[containers]
+image = "docker.n8n.io/n8nio/n8n:latest"
+port = 5678
+
+# Environment variables for n8n configuration
+[containers.env]
+NODE_ENV = "production"
+N8N_PORT = "5678"
+N8N_PROTOCOL = "https"
+N8N_HOST = { binding = "HOST_URL" }
+WEBHOOK_URL = { binding = "WEBHOOK_URL" }
+GENERIC_TIMEZONE = "UTC"
+TZ = "UTC"
+
+# Database configuration (use external managed database)
+DB_TYPE = "postgresdb"
+DB_POSTGRESDB_HOST = { binding = "DB_HOST" }
+DB_POSTGRESDB_PORT = "5432"
+DB_POSTGRESDB_DATABASE = { binding = "DB_NAME" }
+DB_POSTGRESDB_USER = { binding = "DB_USER" }
+DB_POSTGRESDB_PASSWORD = { binding = "DB_PASSWORD" }
+DB_POSTGRESDB_SCHEMA = "public"
+
+# Security and encryption
+N8N_ENCRYPTION_KEY = { binding = "ENCRYPTION_KEY" }
+N8N_USER_MANAGEMENT_DISABLED = "false"
+N8N_DIAGNOSTICS_ENABLED = "false"
+
+# Performance settings
+N8N_RUNNERS_ENABLED = "true"
+N8N_METRICS = "true"
+
+# Secrets (to be set via Cloudflare dashboard or CLI)
+# wrangler secret put DB_HOST
+# wrangler secret put DB_NAME  
+# wrangler secret put DB_USER
+# wrangler secret put DB_PASSWORD
+# wrangler secret put ENCRYPTION_KEY
+# wrangler secret put HOST_URL
+# wrangler secret put WEBHOOK_URL
+
+# Optional: Email configuration secrets
+# wrangler secret put SMTP_HOST
+# wrangler secret put SMTP_PORT
+# wrangler secret put SMTP_USER
+# wrangler secret put SMTP_PASS
+# wrangler secret put DEFAULT_EMAIL
