@@ -197,13 +197,22 @@ fail2ban-client status n8n-auth
 # Update system
 apt update && apt upgrade
 
-# Update n8n
-cd /opt/n8n
-git pull
-cd n8n-production
-docker compose pull
-docker compose up -d
+# Check current n8n version
+cd /opt/setup/hetzner-setup
+./check-n8n-version.sh
+
+# Update n8n to specific version (e.g., 1.100.1)
+./update-n8n.sh 1.100.1
+
+# Or update to latest version
+./update-n8n.sh latest
 ```
+
+The update script automatically:
+- Creates a full backup before updating
+- Updates the Docker image
+- Verifies the update was successful
+- Provides rollback instructions if needed
 
 ### SSL Certificate Renewal
 
@@ -258,8 +267,19 @@ Check these regularly:
 If something goes wrong:
 ```bash
 cd /opt/setup/hetzner-setup
-./restore-backup.sh /opt/n8n/backups/n8n_backup_TIMESTAMP.tar.gz
+
+# List available backups
+ls -la /opt/n8n-backups/
+
+# Restore from specific backup
+./restore-from-backup.sh /opt/n8n-backups/n8n-backup-TIMESTAMP.tar.gz
 ```
+
+The restore script will:
+- Stop n8n services
+- Create a safety backup of current state
+- Restore database and files from backup
+- Restart services and verify functionality
 
 ## Security Considerations
 
