@@ -1,0 +1,575 @@
+{
+  "name": "Linear to Notion Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-webhook",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "webhookId": "linear-notion-sync"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "eventType",
+              "value": "={{ $json.type }}"
+            },
+            {
+              "name": "issueId", 
+              "value": "={{ $json.data.id }}"
+            },
+            {
+              "name": "issueIdentifier",
+              "value": "={{ $json.data.identifier }}"
+            },
+            {
+              "name": "issueTitle",
+              "value": "={{ $json.data.title }}"
+            },
+            {
+              "name": "issueUrl",
+              "value": "={{ $json.data.url }}"
+            },
+            {
+              "name": "issueDescription",
+              "value": "={{ $json.data.description || '' }}"
+            },
+            {
+              "name": "issueState",
+              "value": "={{ $json.data.state?.name || 'Backlog' }}"
+            },
+            {
+              "name": "issuePriority",
+              "value": "={{ $json.data.priority || 0 }}"
+            },
+            {
+              "name": "issueAssignee",
+              "value": "={{ $json.data.assignee?.displayName || '' }}"
+            },
+            {
+              "name": "issueAssigneeEmail",
+              "value": "={{ $json.data.assignee?.email || '' }}"
+            },
+            {
+              "name": "issueCreatedAt",
+              "value": "={{ $json.data.createdAt }}"
+            },
+            {
+              "name": "issueUpdatedAt", 
+              "value": "={{ $json.data.updatedAt }}"
+            },
+            {
+              "name": "issueCycle",
+              "value": "={{ $json.data.cycle?.name || '' }}"
+            },
+            {
+              "name": "issueTeam",
+              "value": "={{ $json.data.team?.name || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-data",
+      "name": "Extract Issue Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node['Extract Issue Data'].json.eventType }}",
+              "operation": "equal",
+              "value2": "Issue"
+            }
+          ]
+        }
+      },
+      "id": "filter-issue-events",
+      "name": "Filter Issue Events",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "filterType": "manual",
+        "matchType": "and",
+        "filters": {
+          "conditions": [
+            {
+              "key": "External ID",
+              "condition": "rich_text",
+              "operation": "equals",
+              "value": "={{ $node['Extract Issue Data'].json.issueId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-existing-page",
+      "name": "Check Existing Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [920, 200],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.results.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "page-exists-check",
+      "name": "Page Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "resource": "databasePage",
+        "pageId": "={{ $node['Check Existing Page'].json.results[0].id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title",
+              "type": "title",
+              "title": "={{ $node['Extract Issue Data'].json.issueTitle }}"
+            },
+            {
+              "key": "Linear ID", 
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueIdentifier }}"
+            },
+            {
+              "key": "Linear URL",
+              "type": "url", 
+              "url": "={{ $node['Extract Issue Data'].json.issueUrl }}"
+            },
+            {
+              "key": "Status",
+              "type": "select",
+              "select": "={{ $node['Map Priority and Status'].json.mappedStatus }}"
+            },
+            {
+              "key": "Priority",
+              "type": "select",
+              "select": "={{ $node['Map Priority and Status'].json.mappedPriority }}"
+            },
+            {
+              "key": "Description",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueDescription }}"
+            },
+            {
+              "key": "Updated Date",
+              "type": "date",
+              "date": "={{ $node['Extract Issue Data'].json.issueUpdatedAt }}"
+            },
+            {
+              "key": "Cycle",
+              "type": "rich_text", 
+              "richText": "={{ $node['Extract Issue Data'].json.issueCycle }}"
+            },
+            {
+              "key": "Team",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueTeam }}"
+            },
+            {
+              "key": "Last Sync",
+              "type": "date",
+              "date": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-notion-page",
+      "name": "Update Notion Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1360, 80],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id", 
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "title": "={{ $node['Extract Issue Data'].json.issueTitle }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Linear ID",
+              "type": "rich_text", 
+              "richText": "={{ $node['Extract Issue Data'].json.issueIdentifier }}"
+            },
+            {
+              "key": "Linear URL",
+              "type": "url",
+              "url": "={{ $node['Extract Issue Data'].json.issueUrl }}"
+            },
+            {
+              "key": "Status", 
+              "type": "select",
+              "select": "={{ $node['Map Priority and Status'].json.mappedStatus }}"
+            },
+            {
+              "key": "Priority",
+              "type": "select",
+              "select": "={{ $node['Map Priority and Status'].json.mappedPriority }}"
+            },
+            {
+              "key": "Description",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueDescription }}"
+            },
+            {
+              "key": "Created Date",
+              "type": "date",
+              "date": "={{ $node['Extract Issue Data'].json.issueCreatedAt }}"
+            },
+            {
+              "key": "Updated Date", 
+              "type": "date",
+              "date": "={{ $node['Extract Issue Data'].json.issueUpdatedAt }}"
+            },
+            {
+              "key": "Cycle",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueCycle }}"
+            },
+            {
+              "key": "Team",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueTeam }}"
+            },
+            {
+              "key": "External ID",
+              "type": "rich_text",
+              "richText": "={{ $node['Extract Issue Data'].json.issueId }}"
+            },
+            {
+              "key": "Last Sync",
+              "type": "date", 
+              "date": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-notion-page",
+      "name": "Create Notion Page", 
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1360, 320],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map Linear priority and status to Notion values\nconst item = $input.first();\n\n// Priority mapping (Linear uses 0-4, 0=No Priority, 1=Urgent, 4=Low)\nconst priorityMap = {\n  0: \"No priority\",\n  1: \"Urgent\", \n  2: \"High\",\n  3: \"Medium\",\n  4: \"Low\"\n};\n\n// Status mapping\nconst statusMap = {\n  \"Backlog\": \"Backlog\",\n  \"Todo\": \"Todo\",\n  \"In Progress\": \"In Progress\", \n  \"In Review\": \"In Review\",\n  \"Done\": \"Done\",\n  \"Cancelled\": \"Cancelled\",\n  \"Canceled\": \"Cancelled\" // Handle both spellings\n};\n\nconst priority = parseInt(item.json.issuePriority) || 0;\nconst status = item.json.issueState || \"Backlog\";\n\nreturn {\n  ...item.json,\n  mappedPriority: priorityMap[priority] || \"No priority\",\n  mappedStatus: statusMap[status] || \"Backlog\"\n};"
+      },
+      "id": "map-priority-status",
+      "name": "Map Priority and Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2, 
+      "position": [920, 400]
+    },
+    {
+      "parameters": {
+        "content": "✅ Linear issue synchronized successfully",
+        "options": {}
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1580, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-webhook-test",
+        "options": {}
+      },
+      "id": "test-webhook",
+      "name": "Test Webhook",
+      "type": "n8n-nodes-base.webhook", 
+      "typeVersion": 1,
+      "position": [260, 500],
+      "webhookId": "linear-notion-test"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-data",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1140, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "❌ Error processing webhook: {{ $json.error?.message || 'Unknown error' }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1580, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $node['Extract Issue Data'].json.eventType }}",
+              "operation": "equal", 
+              "value2": "Remove"
+            }
+          ]
+        }
+      },
+      "id": "check-deletion",
+      "name": "Check Deletion",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "resource": "databasePage", 
+        "pageId": "={{ $node['Check Existing Page'].json.results[0].id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status",
+              "type": "select",
+              "select": "Cancelled"
+            },
+            {
+              "key": "Last Sync",
+              "type": "date",
+              "date": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mark-deleted",
+      "name": "Mark as Cancelled",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [920, 600],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database" 
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Issue Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Issue Data": {
+      "main": [
+        [
+          {
+            "node": "Filter Issue Events", 
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Deletion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Issue Events": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Page",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Map Priority and Status",
+            "type": "main", 
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Page": {
+      "main": [
+        [
+          {
+            "node": "Page Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page Exists?": {
+      "main": [
+        [
+          {
+            "node": "Update Notion Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Notion Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notion Page": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Page": {
+      "main": [
+        [
+          {
+            "node": "Success Response", 
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Priority and Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Page Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Deletion": {
+      "main": [
+        [
+          {
+            "node": "Mark as Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Cancelled": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "linear-to-notion-sync",
+  "tags": [
+    {
+      "createdAt": "2024-07-01T12:00:00.000Z",
+      "updatedAt": "2024-07-01T12:00:00.000Z",
+      "id": "sync",
+      "name": "sync"
+    }
+  ]
+}

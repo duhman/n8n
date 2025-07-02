@@ -1,0 +1,331 @@
+{
+  "name": "Error Handling and Monitoring",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process error information\nconst error = $input.first();\nconst execution = $execution;\nconst workflow = $workflow;\n\n// Extract error details\nconst errorDetails = {\n  timestamp: new Date().toISOString(),\n  workflowId: workflow.id,\n  workflowName: workflow.name,\n  executionId: execution.id,\n  nodeError: {\n    name: error.json.node?.name || 'Unknown',\n    type: error.json.node?.type || 'Unknown',\n    error: error.json.error?.message || 'Unknown error'\n  },\n  errorType: error.json.error?.name || 'Error',\n  stackTrace: error.json.error?.stack || '',\n  inputData: JSON.stringify(error.json.inputData || {}, null, 2),\n  runData: JSON.stringify(error.json.runData || {}, null, 2)\n};\n\n// Determine error severity\nconst severity = determineSeverity(errorDetails);\n\n// Create alert message\nconst alertMessage = `🚨 **${severity} Error in ${errorDetails.workflowName}**\\n\\n` +\n  `**Node:** ${errorDetails.nodeError.name}\\n` +\n  `**Error:** ${errorDetails.nodeError.error}\\n` +\n  `**Time:** ${errorDetails.timestamp}\\n` +\n  `**Execution ID:** ${errorDetails.executionId}\\n\\n` +\n  `**Recommended Action:** ${getRecommendedAction(errorDetails)}`;\n\nfunction determineSeverity(details) {\n  const errorMsg = details.nodeError.error.toLowerCase();\n  const nodeName = details.nodeError.name.toLowerCase();\n  \n  // Critical errors\n  if (errorMsg.includes('authentication') || errorMsg.includes('unauthorized')) {\n    return 'CRITICAL';\n  }\n  if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {\n    return 'HIGH';\n  }\n  if (nodeName.includes('webhook') || nodeName.includes('trigger')) {\n    return 'HIGH';\n  }\n  \n  // Medium errors\n  if (errorMsg.includes('timeout') || errorMsg.includes('network')) {\n    return 'MEDIUM';\n  }\n  if (errorMsg.includes('not found') || errorMsg.includes('404')) {\n    return 'MEDIUM';\n  }\n  \n  // Low errors\n  return 'LOW';\n}\n\nfunction getRecommendedAction(details) {\n  const errorMsg = details.nodeError.error.toLowerCase();\n  \n  if (errorMsg.includes('authentication')) {\n    return 'Check API credentials and regenerate if necessary';\n  }\n  if (errorMsg.includes('rate limit')) {\n    return 'Wait for rate limit reset or implement exponential backoff';\n  }\n  if (errorMsg.includes('not found')) {\n    return 'Verify that the referenced resource (database, issue, etc.) still exists';\n  }\n  if (errorMsg.includes('timeout')) {\n    return 'Check network connectivity and API endpoint status';\n  }\n  if (errorMsg.includes('webhook')) {\n    return 'Verify webhook URL is accessible and Linear webhook settings';\n  }\n  \n  return 'Review error details and check workflow configuration';\n}\n\nreturn {\n  ...errorDetails,\n  severity,\n  alertMessage,\n  shouldRetry: shouldRetry(errorDetails),\n  retryDelay: getRetryDelay(errorDetails)\n};\n\nfunction shouldRetry(details) {\n  const errorMsg = details.nodeError.error.toLowerCase();\n  \n  // Don't retry authentication or permission errors\n  if (errorMsg.includes('authentication') || errorMsg.includes('unauthorized') || errorMsg.includes('forbidden')) {\n    return false;\n  }\n  \n  // Don't retry not found errors\n  if (errorMsg.includes('not found') || errorMsg.includes('404')) {\n    return false;\n  }\n  \n  // Retry temporary errors\n  return errorMsg.includes('timeout') || \n         errorMsg.includes('rate limit') || \n         errorMsg.includes('network') ||\n         errorMsg.includes('503') ||\n         errorMsg.includes('502') ||\n         errorMsg.includes('500');\n}\n\nfunction getRetryDelay(details) {\n  const errorMsg = details.nodeError.error.toLowerCase();\n  \n  if (errorMsg.includes('rate limit')) {\n    return 60; // 1 minute for rate limits\n  }\n  if (errorMsg.includes('timeout')) {\n    return 30; // 30 seconds for timeouts\n  }\n  \n  return 15; // 15 seconds default\n}"
+      },
+      "id": "process-error",
+      "name": "Process Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.severity }}",
+              "operation": "equal",
+              "value2": "CRITICAL"
+            }
+          ]
+        }
+      },
+      "id": "is-critical-error",
+      "name": "Is Critical Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "SLACK_CHANNEL_ID",
+        "text": "={{ $json.alertMessage }}",
+        "otherOptions": {
+          "username": "n8n Error Monitor"
+        }
+      },
+      "id": "send-slack-alert",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [900, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential-id",
+          "name": "Slack - Alerts"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "admin@yourdomain.com",
+        "subject": "🚨 Critical Error in Linear-Notion Sync",
+        "emailFormat": "html",
+        "message": "<h2>Critical Error Alert</h2><pre>{{ $json.alertMessage }}</pre><h3>Error Details:</h3><pre>{{ JSON.stringify($json, null, 2) }}</pre>"
+      },
+      "id": "send-email-alert",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential-id",
+          "name": "SMTP - Alerts"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "databasePage",
+        "databaseId": "ERROR_LOG_DATABASE_ID",
+        "title": "Error: {{ $json.workflowName }} - {{ $json.timestamp }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Severity",
+              "type": "select",
+              "select": "={{ $json.severity }}"
+            },
+            {
+              "key": "Workflow",
+              "type": "rich_text",
+              "richText": "={{ $json.workflowName }}"
+            },
+            {
+              "key": "Node",
+              "type": "rich_text", 
+              "richText": "={{ $json.nodeError.name }}"
+            },
+            {
+              "key": "Error Message",
+              "type": "rich_text",
+              "richText": "={{ $json.nodeError.error }}"
+            },
+            {
+              "key": "Timestamp",
+              "type": "date",
+              "date": "={{ $json.timestamp }}"
+            },
+            {
+              "key": "Execution ID",
+              "type": "rich_text",
+              "richText": "={{ $json.executionId }}"
+            },
+            {
+              "key": "Should Retry",
+              "type": "checkbox",
+              "checkbox": "={{ $json.shouldRetry }}"
+            },
+            {
+              "key": "Status",
+              "type": "select",
+              "select": "Open"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-to-notion",
+      "name": "Log to Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Error Logs"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldRetry }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "should-retry",
+      "name": "Should Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.retryDelay }}",
+        "unit": "seconds"
+      },
+      "id": "wait-before-retry",
+      "name": "Wait Before Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $json.workflowId }}",
+        "source": "error_retry"
+      },
+      "id": "trigger-retry",
+      "name": "Trigger Retry",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "action",
+              "value": "error_logged"
+            },
+            {
+              "name": "severity",
+              "value": "={{ $json.severity }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-retry-response",
+      "name": "No Retry Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Error": {
+      "main": [
+        [
+          {
+            "node": "Is Critical Error?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical Error?": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "Should Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Should Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Retry?": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Retry Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Retry": {
+      "main": [
+        [
+          {
+            "node": "Trigger Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "error-handling-monitoring",
+  "tags": [
+    {
+      "createdAt": "2024-07-01T12:00:00.000Z",
+      "updatedAt": "2024-07-01T12:00:00.000Z",
+      "id": "monitoring",
+      "name": "monitoring"
+    }
+  ]
+}

@@ -1,0 +1,519 @@
+{
+  "name": "Initial Linear to Notion Import",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "issue",
+        "filters": {
+          "projectId": "YOUR_LINEAR_PROJECT_ID"
+        },
+        "returnAll": true,
+        "options": {
+          "includeComments": false
+        }
+      },
+      "id": "get-all-issues",
+      "name": "Get All Linear Issues",
+      "type": "n8n-nodes-base.linear",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "linearApi": {
+          "id": "linear-credential-id",
+          "name": "Linear - Project Sync"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "and",
+        "filters": {
+          "conditions": [
+            {
+              "key": "External ID",
+              "condition": "rich_text",
+              "operation": "is_not_empty"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-existing-pages",
+      "name": "Get Existing Notion Pages",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [460, 480],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create mapping of existing Notion pages by Linear ID\nconst notionPages = $input.all();\nconst existingMap = new Map();\n\nnotionPages.forEach(page => {\n  const externalId = page.json.properties?.['External ID']?.rich_text?.[0]?.plain_text;\n  if (externalId) {\n    existingMap.set(externalId, page.json.id);\n  }\n});\n\n// Store in workflow static data\n$workflow.static.existingNotionPages = Object.fromEntries(existingMap);\n\nreturn {\n  existingCount: existingMap.size,\n  existingIds: Array.from(existingMap.keys())\n};"
+      },
+      "id": "map-existing-pages",
+      "name": "Map Existing Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter out Linear issues that already exist in Notion\nconst linearIssues = $input.all();\nconst existingMap = $workflow.static?.existingNotionPages || {};\n\nconst newIssues = linearIssues.filter(issue => {\n  return !existingMap[issue.json.id];\n});\n\nreturn newIssues.map(issue => ({\n  ...issue.json,\n  // Add mapping helpers\n  mappedPriority: mapPriority(issue.json.priority || 0),\n  mappedStatus: mapStatus(issue.json.state?.name || 'Backlog')\n}));\n\nfunction mapPriority(priority) {\n  const priorityMap = {\n    0: \"No priority\",\n    1: \"Urgent\",\n    2: \"High\", \n    3: \"Medium\",\n    4: \"Low\"\n  };\n  return priorityMap[priority] || \"No priority\";\n}\n\nfunction mapStatus(status) {\n  const statusMap = {\n    \"Backlog\": \"Backlog\",\n    \"Todo\": \"Todo\",\n    \"In Progress\": \"In Progress\",\n    \"In Review\": \"In Review\", \n    \"Done\": \"Done\",\n    \"Canceled\": \"Cancelled\",\n    \"Cancelled\": \"Cancelled\"\n  };\n  return statusMap[status] || \"Backlog\";\n}"
+      },
+      "id": "filter-new-issues",
+      "name": "Filter New Issues",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-new-issues",
+      "name": "Has New Issues?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "split-in-batches",
+      "name": "Split in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Linear ID",
+              "type": "rich_text",
+              "richText": "={{ $json.identifier }}"
+            },
+            {
+              "key": "Linear URL",
+              "type": "url",
+              "url": "={{ $json.url }}"
+            },
+            {
+              "key": "Status",
+              "type": "select",
+              "select": "={{ $json.mappedStatus }}"
+            },
+            {
+              "key": "Priority",
+              "type": "select", 
+              "select": "={{ $json.mappedPriority }}"
+            },
+            {
+              "key": "Description",
+              "type": "rich_text",
+              "richText": "={{ $json.description || '' }}"
+            },
+            {
+              "key": "Created Date",
+              "type": "date",
+              "date": "={{ $json.createdAt }}"
+            },
+            {
+              "key": "Updated Date",
+              "type": "date",
+              "date": "={{ $json.updatedAt }}"
+            },
+            {
+              "key": "Cycle",
+              "type": "rich_text",
+              "richText": "={{ $json.cycle?.name || '' }}"
+            },
+            {
+              "key": "Team",
+              "type": "rich_text",
+              "richText": "={{ $json.team?.name || '' }}"
+            },
+            {
+              "key": "External ID",
+              "type": "rich_text",
+              "richText": "={{ $json.id }}"
+            },
+            {
+              "key": "Last Sync",
+              "type": "date",
+              "date": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-notion-pages",
+      "name": "Create Notion Pages",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1560, 200],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "processedCount",
+              "value": "={{ $json.length }}"
+            }
+          ],
+          "string": [
+            {
+              "name": "batchNumber",
+              "value": "={{ $node['Split in Batches'].context.currentRunIndex + 1 }}"
+            },
+            {
+              "name": "totalBatches",
+              "value": "={{ $node['Split in Batches'].context.totalRuns }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "batch-summary",
+      "name": "Batch Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $node['Split in Batches'].context.currentRunIndex + 1 }}",
+              "operation": "equal",
+              "value2": "={{ $node['Split in Batches'].context.totalRuns }}"
+            }
+          ]
+        }
+      },
+      "id": "is-final-batch",
+      "name": "Is Final Batch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate final import statistics\nconst allBatches = $input.all();\n\nconst totalProcessed = allBatches.reduce((sum, batch) => {\n  return sum + (batch.json.processedCount || 0);\n}, 0);\n\nconst existingCount = $workflow.static?.existingNotionPages ? \n  Object.keys($workflow.static.existingNotionPages).length : 0;\n\nreturn {\n  importCompleted: true,\n  timestamp: new Date().toISOString(),\n  statistics: {\n    totalLinearIssues: totalProcessed + existingCount,\n    newIssuesImported: totalProcessed,\n    existingIssuesSkipped: existingCount,\n    totalBatches: allBatches.length\n  },\n  summary: `Import completed: ${totalProcessed} new issues imported, ${existingCount} existing issues skipped`\n};"
+      },
+      "id": "final-statistics",
+      "name": "Final Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 120]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "No new issues to import"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "existingCount",
+              "value": "={{ Object.keys($workflow.static?.existingNotionPages || {}).length }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-issues-message",
+      "name": "No Issues Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-initial-data",
+      "name": "Merge Initial Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "importType",
+              "value": "Initial Linear to Notion Import"
+            },
+            {
+              "name": "startTime",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "import-start",
+      "name": "Import Start",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [240, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pre-process Linear issues with enhanced mapping\nconst issues = $input.all();\n\nfunction mapPriority(priority) {\n  const priorityMap = {\n    0: \"No priority\",\n    1: \"Urgent\",\n    2: \"High\",\n    3: \"Medium\", \n    4: \"Low\"\n  };\n  return priorityMap[priority] || \"No priority\";\n}\n\nfunction mapStatus(status) {\n  const statusMap = {\n    \"Backlog\": \"Backlog\",\n    \"Todo\": \"Todo\",\n    \"In Progress\": \"In Progress\",\n    \"In Review\": \"In Review\",\n    \"Done\": \"Done\",\n    \"Canceled\": \"Cancelled\",\n    \"Cancelled\": \"Cancelled\"\n  };\n  return statusMap[status] || \"Backlog\";\n}\n\nfunction mapAssignee(assignee) {\n  if (!assignee) return \"\";\n  return assignee.displayName || assignee.name || \"\";\n}\n\nreturn issues.map(issue => ({\n  ...issue.json,\n  mappedPriority: mapPriority(issue.json.priority || 0),\n  mappedStatus: mapStatus(issue.json.state?.name || 'Backlog'),\n  mappedAssignee: mapAssignee(issue.json.assignee),\n  cleanDescription: (issue.json.description || '').substring(0, 2000), // Limit description length\n  formattedCreatedAt: issue.json.createdAt,\n  formattedUpdatedAt: issue.json.updatedAt\n}));"
+      },
+      "id": "preprocess-issues",
+      "name": "Preprocess Issues",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-issues-to-process",
+      "name": "Has Issues to Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 200]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get All Linear Issues",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Existing Notion Pages", 
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Import Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Linear Issues": {
+      "main": [
+        [
+          {
+            "node": "Preprocess Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Notion Pages": {
+      "main": [
+        [
+          {
+            "node": "Map Existing Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Existing Pages": {
+      "main": [
+        [
+          {
+            "node": "Merge Initial Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Preprocess Issues": {
+      "main": [
+        [
+          {
+            "node": "Has Issues to Process?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Issues to Process?": {
+      "main": [
+        [
+          {
+            "node": "Merge Initial Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Initial Data": {
+      "main": [
+        [
+          {
+            "node": "Filter New Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Issues": {
+      "main": [
+        [
+          {
+            "node": "Has New Issues?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Issues?": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Issues Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split in Batches": {
+      "main": [
+        [
+          {
+            "node": "Create Notion Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Pages": {
+      "main": [
+        [
+          {
+            "node": "Batch Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Summary": {
+      "main": [
+        [
+          {
+            "node": "Is Final Batch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Final Batch?": {
+      "main": [
+        [
+          {
+            "node": "Final Statistics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "initial-linear-notion-import",
+  "tags": [
+    {
+      "createdAt": "2024-07-01T12:00:00.000Z",
+      "updatedAt": "2024-07-01T12:00:00.000Z",
+      "id": "import",
+      "name": "import"
+    }
+  ]
+}

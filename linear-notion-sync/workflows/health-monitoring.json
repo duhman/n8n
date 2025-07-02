@@ -1,0 +1,530 @@
+{
+  "name": "Linear-Notion Sync Health Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "hourly-health-check",
+      "name": "Hourly Health Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1
+            }
+          ]
+        },
+        "rule2": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "cronExpression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-report-trigger",
+      "name": "Daily Report (9 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "execution",
+        "filters": {
+          "workflowId": "linear-to-notion-sync",
+          "status": "error",
+          "startedAfter": "={{ new Date(Date.now() - 24*60*60*1000).toISOString() }}"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "check-recent-errors",
+      "name": "Check Recent Errors",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [460, 200],
+      "credentials": {
+        "n8nApi": {
+          "id": "n8n-api-credential-id",
+          "name": "n8n API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "execution", 
+        "filters": {
+          "workflowId": "linear-to-notion-sync",
+          "status": "success",
+          "startedAfter": "={{ new Date(Date.now() - 60*60*1000).toISOString() }}"
+        },
+        "returnAll": true,
+        "limit": 10,
+        "options": {}
+      },
+      "id": "check-recent-success",
+      "name": "Check Recent Success",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "credentials": {
+        "n8nApi": {
+          "id": "n8n-api-credential-id",
+          "name": "n8n API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "YOUR_LINEAR_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "query { viewer { id name } }"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "test-linear-api",
+      "name": "Test Linear API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.notion.com/v1/users/me",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_NOTION_TOKEN"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "test-notion-api",
+      "name": "Test Notion API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "returnAll": false,
+        "limit": 5,
+        "filterType": "manual",
+        "matchType": "and",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Last Sync",
+              "condition": "date",
+              "operation": "after",
+              "date": "={{ new Date(Date.now() - 60*60*1000).toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-recent-syncs",
+      "name": "Check Recent Syncs",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [460, 600],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile health report\nconst errors = $node['Check Recent Errors'].json || [];\nconst successes = $node['Check Recent Success'].json || [];\nconst linearTest = $node['Test Linear API'].json;\nconst notionTest = $node['Test Notion API'].json;\nconst recentSyncs = $node['Check Recent Syncs'].json?.results || [];\n\n// Calculate health metrics\nconst now = new Date();\nconst last24h = new Date(now.getTime() - 24*60*60*1000);\nconst lastHour = new Date(now.getTime() - 60*60*1000);\n\nconst healthMetrics = {\n  timestamp: now.toISOString(),\n  apis: {\n    linear: {\n      status: linearTest?.data?.viewer ? 'healthy' : 'error',\n      responseTime: $node['Test Linear API'].context?.executionTime || 0,\n      lastCheck: now.toISOString()\n    },\n    notion: {\n      status: notionTest?.object === 'user' ? 'healthy' : 'error', \n      responseTime: $node['Test Notion API'].context?.executionTime || 0,\n      lastCheck: now.toISOString()\n    }\n  },\n  sync: {\n    errorsLast24h: errors.length,\n    successesLastHour: successes.length,\n    recentSyncsCount: recentSyncs.length,\n    lastSyncTime: recentSyncs[0]?.properties?.['Last Sync']?.date?.start || null\n  },\n  overall: 'healthy' // Will be updated below\n};\n\n// Determine overall health\nif (healthMetrics.apis.linear.status === 'error' || healthMetrics.apis.notion.status === 'error') {\n  healthMetrics.overall = 'critical';\n} else if (healthMetrics.sync.errorsLast24h > 5) {\n  healthMetrics.overall = 'degraded';\n} else if (healthMetrics.sync.successesLastHour === 0 && recentSyncs.length === 0) {\n  healthMetrics.overall = 'warning';\n}\n\n// Create status message\nconst statusEmoji = {\n  healthy: '✅',\n  warning: '⚠️', \n  degraded: '🟡',\n  critical: '🔴'\n};\n\nconst statusMessage = `${statusEmoji[healthMetrics.overall]} **Linear-Notion Sync Health Report**\\n\\n` +\n  `**Overall Status:** ${healthMetrics.overall.toUpperCase()}\\n\\n` +\n  `**API Health:**\\n` +\n  `• Linear: ${statusEmoji[healthMetrics.apis.linear.status]} ${healthMetrics.apis.linear.status} (${healthMetrics.apis.linear.responseTime}ms)\\n` +\n  `• Notion: ${statusEmoji[healthMetrics.apis.notion.status]} ${healthMetrics.apis.notion.status} (${healthMetrics.apis.notion.responseTime}ms)\\n\\n` +\n  `**Sync Activity:**\\n` +\n  `• Errors (24h): ${healthMetrics.sync.errorsLast24h}\\n` +\n  `• Successes (1h): ${healthMetrics.sync.successesLastHour}\\n` +\n  `• Recent syncs: ${healthMetrics.sync.recentSyncsCount}\\n` +\n  `• Last sync: ${healthMetrics.sync.lastSyncTime || 'No recent syncs'}`;\n\nreturn {\n  ...healthMetrics,\n  statusMessage,\n  needsAlert: healthMetrics.overall === 'critical' || healthMetrics.overall === 'degraded'\n};"
+      },
+      "id": "compile-health-report",
+      "name": "Compile Health Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needsAlert }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "needs-alert",
+      "name": "Needs Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "SLACK_CHANNEL_ID",
+        "text": "={{ $json.statusMessage }}",
+        "otherOptions": {
+          "username": "n8n Health Monitor"
+        }
+      },
+      "id": "send-health-alert",
+      "name": "Send Health Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1120, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential-id",
+          "name": "Slack - Alerts"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "databasePage",
+        "databaseId": "HEALTH_LOG_DATABASE_ID",
+        "title": "Health Check - {{ $json.timestamp }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status",
+              "type": "select",
+              "select": "={{ $json.overall }}"
+            },
+            {
+              "key": "Linear API",
+              "type": "select",
+              "select": "={{ $json.apis.linear.status }}"
+            },
+            {
+              "key": "Notion API",
+              "type": "select", 
+              "select": "={{ $json.apis.notion.status }}"
+            },
+            {
+              "key": "Errors 24h",
+              "type": "number",
+              "number": "={{ $json.sync.errorsLast24h }}"
+            },
+            {
+              "key": "Successes 1h",
+              "type": "number",
+              "number": "={{ $json.sync.successesLastHour }}"
+            },
+            {
+              "key": "Recent Syncs",
+              "type": "number",
+              "number": "={{ $json.sync.recentSyncsCount }}"
+            },
+            {
+              "key": "Timestamp",
+              "type": "date",
+              "date": "={{ $json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-health-status",
+      "name": "Log Health Status",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1120, 400],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Health Logs"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate daily summary report\nconst healthData = $input.first();\n\n// Calculate additional daily metrics\nconst dailySummary = {\n  date: new Date().toISOString().split('T')[0],\n  overallHealth: healthData.json.overall,\n  uptime: calculateUptime(healthData.json),\n  totalErrors: healthData.json.sync.errorsLast24h,\n  avgResponseTime: {\n    linear: healthData.json.apis.linear.responseTime,\n    notion: healthData.json.apis.notion.responseTime\n  },\n  recommendations: generateRecommendations(healthData.json)\n};\n\nfunction calculateUptime(health) {\n  // Simple uptime calculation based on API health\n  if (health.apis.linear.status === 'healthy' && health.apis.notion.status === 'healthy') {\n    return health.sync.errorsLast24h === 0 ? 100 : Math.max(0, 100 - (health.sync.errorsLast24h * 2));\n  }\n  return 0;\n}\n\nfunction generateRecommendations(health) {\n  const recommendations = [];\n  \n  if (health.apis.linear.status === 'error') {\n    recommendations.push('🔧 Check Linear API credentials and connectivity');\n  }\n  if (health.apis.notion.status === 'error') {\n    recommendations.push('🔧 Check Notion integration token and database permissions');\n  }\n  if (health.sync.errorsLast24h > 10) {\n    recommendations.push('⚠️ High error rate detected - review error logs and workflow logic');\n  }\n  if (health.sync.successesLastHour === 0) {\n    recommendations.push('🔍 No recent successful syncs - check webhook connectivity');\n  }\n  if (health.apis.linear.responseTime > 5000 || health.apis.notion.responseTime > 5000) {\n    recommendations.push('🐌 High API response times - monitor for rate limiting');\n  }\n  \n  if (recommendations.length === 0) {\n    recommendations.push('✅ All systems operating normally');\n  }\n  \n  return recommendations;\n}\n\nconst reportMessage = `📊 **Daily Linear-Notion Sync Report**\\n\\n` +\n  `**Date:** ${dailySummary.date}\\n` +\n  `**Overall Health:** ${dailySummary.overallHealth.toUpperCase()}\\n` +\n  `**Uptime:** ${dailySummary.uptime.toFixed(1)}%\\n` +\n  `**Total Errors (24h):** ${dailySummary.totalErrors}\\n\\n` +\n  `**API Performance:**\\n` +\n  `• Linear: ${dailySummary.avgResponseTime.linear}ms\\n` +\n  `• Notion: ${dailySummary.avgResponseTime.notion}ms\\n\\n` +\n  `**Recommendations:**\\n` +\n  dailySummary.recommendations.map(rec => `• ${rec}`).join('\\n');\n\nreturn {\n  ...dailySummary,\n  reportMessage\n};"
+      },
+      "id": "generate-daily-report",
+      "name": "Generate Daily Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "SLACK_CHANNEL_ID",
+        "text": "={{ $json.reportMessage }}",
+        "otherOptions": {
+          "username": "n8n Daily Report"
+        }
+      },
+      "id": "send-daily-report",
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [900, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential-id",
+          "name": "Slack - Alerts"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-health-data",
+      "name": "Merge Health Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [680, 400]
+    }
+  ],
+  "connections": {
+    "Hourly Health Check": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Errors",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Recent Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Test Linear API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Test Notion API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Recent Syncs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Report (9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Errors",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Recent Success", 
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Test Linear API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Test Notion API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Recent Syncs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Errors": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Success": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Test Linear API": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Test Notion API": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Data",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Check Recent Syncs": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Data",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge Health Data": {
+      "main": [
+        [
+          {
+            "node": "Compile Health Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Health Report": {
+      "main": [
+        [
+          {
+            "node": "Needs Alert?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Health Status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Health Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Daily Report": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "health-monitoring",
+  "tags": [
+    {
+      "createdAt": "2024-07-01T12:00:00.000Z",
+      "updatedAt": "2024-07-01T12:00:00.000Z",
+      "id": "monitoring",
+      "name": "monitoring"
+    }
+  ]
+}

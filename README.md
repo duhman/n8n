@@ -73,6 +73,33 @@ cd cloudflare-containers
 
 See [`cloudflare-containers/`](./cloudflare-containers/) for serverless deployment options.
 
+## Workflow Solutions
+
+### Linear-Notion Project Sync
+
+Comprehensive real-time synchronization between Linear projects and Notion databases:
+
+```bash
+# Import ready-to-use workflows
+cd linear-notion-sync
+# See setup-guide.md for complete instructions
+```
+
+**Features:**
+- 🔄 Real-time bidirectional sync between Linear and Notion
+- 📊 Automatic progress tracking and completion percentages  
+- 🛡️ Robust error handling with intelligent retry logic
+- 📈 Health monitoring with daily reports and alerts
+- 🔧 Production-ready with comprehensive configuration
+
+**Use Cases:**
+- Project management teams using both Linear and Notion
+- Progress tracking across platforms
+- Unified project visibility and reporting
+- Cross-team collaboration and communication
+
+See [`linear-notion-sync/README.md`](./linear-notion-sync/README.md) for complete setup documentation.
+
 ## Resources
 
 - 📚 [Documentation](https://docs.n8n.io)

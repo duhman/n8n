@@ -1,0 +1,507 @@
+{
+  "name": "Notion to Linear Sync", 
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "databasePage",
+        "databaseId": "YOUR_NOTION_DATABASE_ID",
+        "returnAll": false,
+        "limit": 50,
+        "filterType": "manual",
+        "matchType": "and", 
+        "filters": {
+          "conditions": [
+            {
+              "key": "External ID",
+              "condition": "rich_text",
+              "operation": "is_not_empty"
+            },
+            {
+              "key": "Last Sync",
+              "condition": "date",
+              "operation": "before",
+              "date": "={{ new Date(Date.now() - 10*60*1000).toISOString() }}"
+            }
+          ]
+        },
+        "sorts": [
+          {
+            "key": "Updated Date",
+            "direction": "descending"
+          }
+        ],
+        "options": {}
+      },
+      "id": "get-recent-changes",
+      "name": "Get Recent Changes",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.results.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-changes",
+      "name": "Has Changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "options": {}
+      },
+      "id": "split-pages",
+      "name": "Split Pages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Notion page properties\nconst item = $input.first();\nconst page = item.json;\n\n// Helper function to extract property values\nfunction extractProperty(properties, key) {\n  const prop = properties[key];\n  if (!prop) return null;\n  \n  switch (prop.type) {\n    case 'title':\n      return prop.title?.[0]?.plain_text || '';\n    case 'rich_text':\n      return prop.rich_text?.[0]?.plain_text || '';\n    case 'select':\n      return prop.select?.name || '';\n    case 'date':\n      return prop.date?.start || null;\n    case 'people':\n      return prop.people?.[0]?.name || '';\n    case 'url':\n      return prop.url || '';\n    default:\n      return null;\n  }\n}\n\nconst props = page.properties;\n\n// Extract all relevant properties\nconst extractedData = {\n  notionPageId: page.id,\n  linearId: extractProperty(props, 'External ID'),\n  title: extractProperty(props, 'Title'),\n  status: extractProperty(props, 'Status'),\n  priority: extractProperty(props, 'Priority'),\n  assignee: extractProperty(props, 'Assignee'),\n  description: extractProperty(props, 'Description'),\n  lastSync: extractProperty(props, 'Last Sync'),\n  lastEdited: page.last_edited_time,\n  \n  // Check if this page was recently edited\n  wasRecentlyEdited: new Date(page.last_edited_time) > new Date(extractProperty(props, 'Last Sync') || '1970-01-01')\n};\n\n// Only process if actually changed since last sync\nif (!extractedData.wasRecentlyEdited) {\n  return null; // Skip this item\n}\n\nreturn extractedData;"
+      },
+      "id": "extract-notion-data",
+      "name": "Extract Notion Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.linearId }}",
+              "operation": "isNotEmpty"
+            }
+          ],
+          "boolean": [
+            {
+              "value1": "={{ $json.wasRecentlyEdited }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "filter-valid-changes",
+      "name": "Filter Valid Changes",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "resource": "issue",
+        "issueId": "={{ $json.linearId }}",
+        "options": {}
+      },
+      "id": "get-linear-issue",
+      "name": "Get Linear Issue",
+      "type": "n8n-nodes-base.linear",
+      "typeVersion": 1,
+      "position": [1560, 120],
+      "credentials": {
+        "linearApi": {
+          "id": "linear-credential-id",
+          "name": "Linear - Project Sync"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map Notion values back to Linear format\nconst notionItem = $input.first();\nconst linearItem = $input.last();\n\n// Status mapping (Notion → Linear)\nconst statusMap = {\n  \"Backlog\": \"Backlog\",\n  \"Todo\": \"Todo\", \n  \"In Progress\": \"In Progress\",\n  \"In Review\": \"In Review\",\n  \"Done\": \"Done\",\n  \"Cancelled\": \"Canceled\" // Linear uses \"Canceled\"\n};\n\n// Priority mapping (Notion → Linear)\nconst priorityMap = {\n  \"No priority\": 0,\n  \"Low\": 4,\n  \"Medium\": 3, \n  \"High\": 2,\n  \"Urgent\": 1\n};\n\n// Check what needs to be updated\nconst updates = {};\nlet hasChanges = false;\n\n// Check title\nif (notionItem.json.title !== linearItem.json.title) {\n  updates.title = notionItem.json.title;\n  hasChanges = true;\n}\n\n// Check status\nconst mappedStatus = statusMap[notionItem.json.status];\nif (mappedStatus && mappedStatus !== linearItem.json.state?.name) {\n  updates.stateId = mappedStatus; // Will need to resolve to state ID\n  hasChanges = true;\n}\n\n// Check priority\nconst mappedPriority = priorityMap[notionItem.json.priority];\nif (mappedPriority !== undefined && mappedPriority !== linearItem.json.priority) {\n  updates.priority = mappedPriority;\n  hasChanges = true;\n}\n\n// Check description  \nif (notionItem.json.description && notionItem.json.description !== linearItem.json.description) {\n  updates.description = notionItem.json.description;\n  hasChanges = true;\n}\n\nreturn {\n  linearId: notionItem.json.linearId,\n  notionPageId: notionItem.json.notionPageId,\n  updates,\n  hasChanges,\n  currentLinear: linearItem.json,\n  currentNotion: notionItem.json\n};"
+      },
+      "id": "compare-and-map",
+      "name": "Compare and Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hasChanges }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "has-updates",
+      "name": "Has Updates?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2000, 120]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "resource": "issue",
+        "issueId": "={{ $json.linearId }}",
+        "updateFields": {
+          "title": "={{ $json.updates.title }}",
+          "description": "={{ $json.updates.description }}",
+          "priority": "={{ $json.updates.priority }}",
+          "stateId": "={{ $json.updates.stateId }}"
+        },
+        "options": {}
+      },
+      "id": "update-linear-issue",
+      "name": "Update Linear Issue", 
+      "type": "n8n-nodes-base.linear",
+      "typeVersion": 1,
+      "position": [2220, 60],
+      "credentials": {
+        "linearApi": {
+          "id": "linear-credential-id",
+          "name": "Linear - Project Sync"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "resource": "databasePage",
+        "pageId": "={{ $json.notionPageId }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Last Sync",
+              "type": "date",
+              "date": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-sync-timestamp",
+      "name": "Update Sync Timestamp",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [2220, 180],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credential-id",
+          "name": "Notion - Project Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-responses",
+      "name": "Merge Responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [2440, 120]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "syncedCount",
+              "value": "={{ $json.length }}"
+            },
+            {
+              "name": "syncTime", 
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sync-summary",
+      "name": "Sync Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [2660, 120]
+    },
+    {
+      "parameters": {
+        "operation": "getMany",
+        "resource": "workflowState",
+        "teamId": "YOUR_LINEAR_TEAM_ID",
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "get-workflow-states",
+      "name": "Get Workflow States",
+      "type": "n8n-nodes-base.linear",
+      "typeVersion": 1,
+      "position": [1560, 280],
+      "credentials": {
+        "linearApi": {
+          "id": "linear-credential-id",
+          "name": "Linear - Project Sync"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create state name to ID mapping\nconst states = $input.all();\nconst stateMap = {};\n\nstates.forEach(state => {\n  if (state.json && state.json.name) {\n    stateMap[state.json.name] = state.json.id;\n  }\n});\n\n// Store in static data for use in other nodes\n$workflow.static.stateMapping = stateMap;\n\nreturn { stateMapping: stateMap };"
+      },
+      "id": "map-workflow-states",
+      "name": "Map Workflow States",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enhanced mapping with state ID resolution\nconst notionItem = $input.first();\nconst linearItem = $input.last();\n\n// Get state mapping from workflow static data\nconst stateMapping = $workflow.static?.stateMapping || {};\n\n// Status mapping (Notion → Linear)\nconst statusMap = {\n  \"Backlog\": \"Backlog\",\n  \"Todo\": \"Todo\",\n  \"In Progress\": \"In Progress\", \n  \"In Review\": \"In Review\",\n  \"Done\": \"Done\",\n  \"Cancelled\": \"Canceled\"\n};\n\n// Priority mapping (Notion → Linear)\nconst priorityMap = {\n  \"No priority\": 0,\n  \"Low\": 4,\n  \"Medium\": 3,\n  \"High\": 2, \n  \"Urgent\": 1\n};\n\n// Check what needs to be updated\nconst updates = {};\nlet hasChanges = false;\n\n// Check title\nif (notionItem.json.title && notionItem.json.title !== linearItem.json.title) {\n  updates.title = notionItem.json.title;\n  hasChanges = true;\n}\n\n// Check status with state ID resolution\nconst mappedStatusName = statusMap[notionItem.json.status];\nif (mappedStatusName) {\n  const stateId = stateMapping[mappedStatusName];\n  if (stateId && stateId !== linearItem.json.state?.id) {\n    updates.stateId = stateId;\n    hasChanges = true;\n  }\n}\n\n// Check priority\nconst mappedPriority = priorityMap[notionItem.json.priority];\nif (mappedPriority !== undefined && mappedPriority !== linearItem.json.priority) {\n  updates.priority = mappedPriority;\n  hasChanges = true;\n}\n\n// Check description\nif (notionItem.json.description && notionItem.json.description !== linearItem.json.description) {\n  updates.description = notionItem.json.description;\n  hasChanges = true;\n}\n\nreturn {\n  linearId: notionItem.json.linearId,\n  notionPageId: notionItem.json.notionPageId,\n  updates,\n  hasChanges,\n  currentLinear: linearItem.json,\n  currentNotion: notionItem.json,\n  debugInfo: {\n    stateMapping,\n    mappedStatusName,\n    resolvedStateId: stateMapping[mappedStatusName]\n  }\n};"
+      },
+      "id": "enhanced-compare-map",
+      "name": "Enhanced Compare and Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 280]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-with-states",
+      "name": "Merge with States",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Changes": {
+      "main": [
+        [
+          {
+            "node": "Has Changes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Changes?": {
+      "main": [
+        [
+          {
+            "node": "Split Pages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Workflow States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Pages": {
+      "main": [
+        [
+          {
+            "node": "Extract Notion Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Notion Data": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Changes": {
+      "main": [
+        [
+          {
+            "node": "Get Linear Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Linear Issue": {
+      "main": [
+        [
+          {
+            "node": "Merge with States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge with States": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Compare and Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enhanced Compare and Map": {
+      "main": [
+        [
+          {
+            "node": "Has Updates?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Updates?": {
+      "main": [
+        [
+          {
+            "node": "Update Linear Issue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Sync Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Linear Issue": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Sync Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Responses": {
+      "main": [
+        [
+          {
+            "node": "Sync Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workflow States": {
+      "main": [
+        [
+          {
+            "node": "Map Workflow States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Workflow States": {
+      "main": [
+        [
+          {
+            "node": "Merge with States",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "saveManualExecutions": true
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "notion-to-linear-sync",
+  "tags": [
+    {
+      "createdAt": "2024-07-01T12:00:00.000Z",
+      "updatedAt": "2024-07-01T12:00:00.000Z", 
+      "id": "sync",
+      "name": "sync"
+    }
+  ]
+}
