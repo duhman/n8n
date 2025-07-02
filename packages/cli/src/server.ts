@@ -246,6 +246,157 @@ export class Server extends AbstractServer {
 
 		await handleMfaDisable();
 
+		// Set up static file serving BEFORE registering controllers to avoid auth middleware
+		const maxAge = Time.days.toMilliseconds;
+		const cacheOptions = inE2ETests || inDevelopment ? {} : { maxAge };
+		const { staticCacheDir } = Container.get(InstanceSettings);
+
+		if (frontendService) {
+			// Serve node icons
+			this.app.use(
+				[
+					'/icons/{@:scope/}:packageName/*path/*file.svg',
+					'/icons/{@:scope/}:packageName/*path/*file.png',
+				],
+				async (req, res) => {
+					// eslint-disable-next-line prefer-const
+					let { scope, packageName } = req.params;
+					if (scope) packageName = `@${scope}/${packageName}`;
+					const filePath = this.loadNodesAndCredentials.resolveIcon(packageName, req.originalUrl);
+					if (filePath) {
+						try {
+							await fsAccess(filePath);
+							return res.sendFile(filePath, { maxAge, dotfiles: 'allow' });
+						} catch {}
+					}
+					res.sendStatus(404);
+				},
+			);
+
+			// Serve node schemas
+			const serveSchemas: express.RequestHandler = async (req, res) => {
+				const { node, version, resource, operation } = req.params;
+				const filePath = this.loadNodesAndCredentials.resolveSchema({
+					node,
+					resource,
+					operation,
+					version,
+				});
+
+				if (filePath) {
+					try {
+						await fsAccess(filePath);
+						return res.sendFile(filePath, cacheOptions);
+					} catch {}
+				}
+				res.sendStatus(404);
+			};
+			this.app.use('/schemas/:node/:version{/:resource}{/:operation}.json', serveSchemas);
+
+			// Set up static file serving for frontend assets
+			const setCustomCacheHeader = (res: express.Response) => {
+				if (/^\/types\/(nodes|credentials).json$/.test(res.req.url)) {
+					res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+				}
+			};
+
+			// Route all UI urls to index.html to support history-api
+			const nonUIRoutes: Readonly<string[]> = [
+				'favicon.ico',
+				'assets',
+				'static',
+				'types',
+				'healthz',
+				'metrics',
+				'e2e',
+				this.restEndpoint,
+				this.endpointPresetCredentials,
+				isApiEnabled() ? '' : publicApiEndpoint,
+				...this.globalConfig.endpoints.additionalNonUIRoutes.split(':'),
+			].filter((u) => !!u);
+			const nonUIRoutesRegex = new RegExp(`^/(${nonUIRoutes.join('|')})(/?|/.*)$`);
+
+			const isTLSEnabled =
+				this.globalConfig.protocol === 'https' && !!(this.sslKey && this.sslCert);
+			const isPreviewMode = process.env.N8N_PREVIEW_MODE === 'true';
+			const cspDirectives = jsonParse<{ [key: string]: Iterable<string> }>(
+				Container.get(SecurityConfig).contentSecurityPolicy,
+				{
+					errorMessage: 'The contentSecurityPolicy is not valid JSON.',
+				},
+			);
+			const cspReportOnly = Container.get(SecurityConfig).contentSecurityPolicyReportOnly;
+			const securityHeadersMiddleware = helmet({
+				contentSecurityPolicy: isEmpty(cspDirectives)
+					? false
+					: {
+							useDefaults: false,
+							reportOnly: cspReportOnly,
+							directives: {
+								...cspDirectives,
+							},
+						},
+				xFrameOptions:
+					isPreviewMode || inE2ETests || inDevelopment ? false : { action: 'sameorigin' },
+				dnsPrefetchControl: false,
+				// This is only relevant for Internet-explorer, which we do not support
+				ieNoOpen: false,
+				// This is already disabled in AbstractServer
+				xPoweredBy: false,
+				// Enable HSTS headers only when n8n handles TLS.
+				// if n8n is behind a reverse-proxy, then these headers needs to be configured there
+				strictTransportSecurity: isTLSEnabled
+					? {
+							maxAge: 180 * Time.days.toSeconds,
+							includeSubDomains: false,
+							preload: false,
+						}
+					: false,
+			});
+
+			const historyApiHandler: express.RequestHandler = (req, res, next) => {
+				const {
+					method,
+					headers: { accept },
+				} = req;
+				if (
+					method === 'GET' &&
+					accept &&
+					(accept.includes('text/html') || accept.includes('*/*')) &&
+					!req.path.endsWith('.wasm') &&
+					!nonUIRoutesRegex.test(req.path)
+				) {
+					res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
+
+					if (req.path.startsWith('/signup')) {
+						res.sendFile('index.html', { root: staticCacheDir, maxAge: 0, lastModified: false });
+					} else {
+						securityHeadersMiddleware(req, res, () => {
+							res.sendFile('index.html', {
+								root: staticCacheDir,
+								maxAge: 0,
+								lastModified: false,
+							});
+						});
+					}
+				} else {
+					next();
+				}
+			};
+
+			this.app.use(
+				'/',
+				historyApiHandler,
+				express.static(staticCacheDir, {
+					...cacheOptions,
+					setHeaders: setCustomCacheHeader,
+				}),
+				express.static(EDITOR_UI_DIST_DIR, cacheOptions),
+			);
+		} else {
+			this.app.use('/', express.static(staticCacheDir, cacheOptions));
+		}
+
 		await this.registerAdditionalControllers();
 
 		// register all known controllers
@@ -331,141 +482,6 @@ export class Server extends AbstractServer {
 					}
 				},
 			);
-		}
-
-		const maxAge = Time.days.toMilliseconds;
-		const cacheOptions = inE2ETests || inDevelopment ? {} : { maxAge };
-		const { staticCacheDir } = Container.get(InstanceSettings);
-		if (frontendService) {
-			this.app.use(
-				[
-					'/icons/{@:scope/}:packageName/*path/*file.svg',
-					'/icons/{@:scope/}:packageName/*path/*file.png',
-				],
-				async (req, res) => {
-					// eslint-disable-next-line prefer-const
-					let { scope, packageName } = req.params;
-					if (scope) packageName = `@${scope}/${packageName}`;
-					const filePath = this.loadNodesAndCredentials.resolveIcon(packageName, req.originalUrl);
-					if (filePath) {
-						try {
-							await fsAccess(filePath);
-							return res.sendFile(filePath, { maxAge, dotfiles: 'allow' });
-						} catch {}
-					}
-					res.sendStatus(404);
-				},
-			);
-
-			const serveSchemas: express.RequestHandler = async (req, res) => {
-				const { node, version, resource, operation } = req.params;
-				const filePath = this.loadNodesAndCredentials.resolveSchema({
-					node,
-					resource,
-					operation,
-					version,
-				});
-
-				if (filePath) {
-					try {
-						await fsAccess(filePath);
-						return res.sendFile(filePath, cacheOptions);
-					} catch {}
-				}
-				res.sendStatus(404);
-			};
-			this.app.use('/schemas/:node/:version{/:resource}{/:operation}.json', serveSchemas);
-
-			const isTLSEnabled =
-				this.globalConfig.protocol === 'https' && !!(this.sslKey && this.sslCert);
-			const isPreviewMode = process.env.N8N_PREVIEW_MODE === 'true';
-			const cspDirectives = jsonParse<{ [key: string]: Iterable<string> }>(
-				Container.get(SecurityConfig).contentSecurityPolicy,
-				{
-					errorMessage: 'The contentSecurityPolicy is not valid JSON.',
-				},
-			);
-			const cspReportOnly = Container.get(SecurityConfig).contentSecurityPolicyReportOnly;
-			const securityHeadersMiddleware = helmet({
-				contentSecurityPolicy: isEmpty(cspDirectives)
-					? false
-					: {
-							useDefaults: false,
-							reportOnly: cspReportOnly,
-							directives: {
-								...cspDirectives,
-							},
-						},
-				xFrameOptions:
-					isPreviewMode || inE2ETests || inDevelopment ? false : { action: 'sameorigin' },
-				dnsPrefetchControl: false,
-				// This is only relevant for Internet-explorer, which we do not support
-				ieNoOpen: false,
-				// This is already disabled in AbstractServer
-				xPoweredBy: false,
-				// Enable HSTS headers only when n8n handles TLS.
-				// if n8n is behind a reverse-proxy, then these headers needs to be configured there
-				strictTransportSecurity: isTLSEnabled
-					? {
-							maxAge: 180 * Time.days.toSeconds,
-							includeSubDomains: false,
-							preload: false,
-						}
-					: false,
-			});
-
-			// Route all UI urls to index.html to support history-api
-			const nonUIRoutes: Readonly<string[]> = [
-				'favicon.ico',
-				'assets',
-				'static',
-				'types',
-				'healthz',
-				'metrics',
-				'e2e',
-				this.restEndpoint,
-				this.endpointPresetCredentials,
-				isApiEnabled() ? '' : publicApiEndpoint,
-				...this.globalConfig.endpoints.additionalNonUIRoutes.split(':'),
-			].filter((u) => !!u);
-			const nonUIRoutesRegex = new RegExp(`^/(${nonUIRoutes.join('|')})/?.*$`);
-			const historyApiHandler: express.RequestHandler = (req, res, next) => {
-				const {
-					method,
-					headers: { accept },
-				} = req;
-				if (
-					method === 'GET' &&
-					accept &&
-					(accept.includes('text/html') || accept.includes('*/*')) &&
-					!req.path.endsWith('.wasm') &&
-					!nonUIRoutesRegex.test(req.path)
-				) {
-					res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
-					securityHeadersMiddleware(req, res, () => {
-						res.sendFile('index.html', { root: staticCacheDir, maxAge: 0, lastModified: false });
-					});
-				} else {
-					next();
-				}
-			};
-			const setCustomCacheHeader = (res: express.Response) => {
-				if (/^\/types\/(nodes|credentials).json$/.test(res.req.url)) {
-					res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-				}
-			};
-
-			this.app.use(
-				'/',
-				historyApiHandler,
-				express.static(staticCacheDir, {
-					...cacheOptions,
-					setHeaders: setCustomCacheHeader,
-				}),
-				express.static(EDITOR_UI_DIST_DIR, cacheOptions),
-			);
-		} else {
-			this.app.use('/', express.static(staticCacheDir, cacheOptions));
 		}
 	}
 
