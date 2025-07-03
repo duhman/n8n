@@ -14,7 +14,14 @@ export const CUSTOM_API_CALL_KEY = '__CUSTOM_API_CALL__';
 export const CLI_DIR = resolve(__dirname, '..');
 export const TEMPLATES_DIR = join(CLI_DIR, 'templates');
 export const NODES_BASE_DIR = dirname(require.resolve('n8n-nodes-base'));
-export const EDITOR_UI_DIST_DIR = join(dirname(require.resolve('n8n-editor-ui')), 'dist');
+export const EDITOR_UI_DIST_DIR = (() => {
+	try {
+		return join(dirname(require.resolve('n8n-editor-ui')), 'dist');
+	} catch {
+		// Fallback for development when n8n-editor-ui is not properly linked
+		return resolve(__dirname, '../../frontend/editor-ui/dist');
+	}
+})();
 
 const packageJsonPath = join(CLI_DIR, 'package.json');
 const n8nPackageJson = jsonParse<n8n.PackageJson>(readFileSync(packageJsonPath, 'utf8'));

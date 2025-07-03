@@ -147,6 +147,13 @@ export default mergeConfig(
 			minify: !!release,
 			sourcemap: !!release,
 			target,
+			rollupOptions: {
+				output: {
+					manualChunks: {
+						projectHeader: ['src/components/Projects/ProjectHeader.vue'],
+					},
+				},
+			},
 		},
 		optimizeDeps: {
 			esbuildOptions: {
