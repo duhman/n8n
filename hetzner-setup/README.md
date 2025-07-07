@@ -58,6 +58,7 @@ chmod +x *.sh
 ### Step 1: Initial Server Setup
 
 The `initial-setup.sh` script performs:
+
 - System updates and essential packages installation
 - Docker and Docker Compose installation
 - UFW firewall configuration
@@ -69,6 +70,7 @@ The `initial-setup.sh` script performs:
 - Kernel optimization
 
 **Run:**
+
 ```bash
 ./initial-setup.sh
 ```
@@ -76,6 +78,7 @@ The `initial-setup.sh` script performs:
 ### Step 2: Deploy n8n
 
 The `deploy-n8n.sh` script:
+
 - Clones your n8n repository
 - Sets up production configuration
 - Generates secure passwords and encryption keys
@@ -84,22 +87,26 @@ The `deploy-n8n.sh` script:
 - Creates systemd service for auto-start
 
 **Run:**
+
 ```bash
 ./deploy-n8n.sh
 ```
 
 You'll be prompted for:
+
 - Domain name (e.g., n8n.yourdomain.com)
 - Email configuration (optional)
 
 ### Step 3: Configure DNS
 
 Before running the security script:
+
 1. Go to your domain registrar
 2. Create an A record pointing to your server IP
 3. Wait for DNS propagation (5-30 minutes)
 
 Test DNS:
+
 ```bash
 dig +short yourdomain.com
 # Should return your server IP
@@ -108,6 +115,7 @@ dig +short yourdomain.com
 ### Step 4: Security Hardening
 
 The `secure-server.sh` script implements:
+
 - SSL/TLS certificate via Let's Encrypt
 - Enhanced Nginx security headers
 - Rate limiting
@@ -117,6 +125,7 @@ The `secure-server.sh` script implements:
 - Automated certificate renewal
 
 **Run:**
+
 ```bash
 ./secure-server.sh
 ```
@@ -124,6 +133,7 @@ The `secure-server.sh` script implements:
 ### Step 5: Backup Configuration
 
 The `backup-setup.sh` script sets up:
+
 - Daily automated backups at 2:30 AM
 - 7-day retention policy
 - Options for local storage or Hetzner Storage Box
@@ -131,11 +141,13 @@ The `backup-setup.sh` script sets up:
 - Encrypted configuration backup
 
 **Run:**
+
 ```bash
 ./backup-setup.sh
 ```
 
 Choose backup destination:
+
 1. Local storage only
 2. Hetzner Storage Box (recommended)
 3. Custom remote location
@@ -151,6 +163,7 @@ Choose backup destination:
 ### Important Commands
 
 **Service Management:**
+
 ```bash
 # View logs
 docker compose -f /opt/n8n/n8n-production/docker-compose.yml logs -f
@@ -166,6 +179,7 @@ docker compose -f /opt/n8n/n8n-production/docker-compose.yml up -d
 ```
 
 **Backup Management:**
+
 ```bash
 # Run manual backup
 sudo -u n8n /usr/local/bin/n8n-backup.sh
@@ -178,6 +192,7 @@ sudo -u n8n /usr/local/bin/n8n-backup.sh
 ```
 
 **Security Monitoring:**
+
 ```bash
 # Check security status
 /usr/local/bin/n8n-security-check.sh
@@ -209,6 +224,7 @@ cd /opt/setup/hetzner-setup
 ```
 
 The update script automatically:
+
 - Creates a full backup before updating
 - Updates the Docker image
 - Verifies the update was successful
@@ -217,6 +233,7 @@ The update script automatically:
 ### SSL Certificate Renewal
 
 Certificates auto-renew via cron. To manually renew:
+
 ```bash
 certbot renew
 systemctl reload nginx
@@ -225,6 +242,7 @@ systemctl reload nginx
 ### Monitoring
 
 Check these regularly:
+
 - Disk space: `df -h`
 - Memory usage: `free -h`
 - Docker stats: `docker stats`
@@ -235,17 +253,20 @@ Check these regularly:
 ### n8n Not Accessible
 
 1. Check services:
+
    ```bash
    docker compose -f /opt/n8n/n8n-production/docker-compose.yml ps
    ```
 
 2. Check Nginx:
+
    ```bash
    systemctl status nginx
    nginx -t
    ```
 
 3. Check firewall:
+
    ```bash
    ufw status
    ```
@@ -253,11 +274,13 @@ Check these regularly:
 ### Database Issues
 
 1. Check PostgreSQL:
+
    ```bash
    docker compose -f /opt/n8n/n8n-production/docker-compose.yml logs postgres
    ```
 
 2. Access database:
+
    ```bash
    docker compose -f /opt/n8n/n8n-production/docker-compose.yml exec postgres psql -U n8n
    ```
@@ -265,6 +288,7 @@ Check these regularly:
 ### Restore from Backup
 
 If something goes wrong:
+
 ```bash
 cd /opt/setup/hetzner-setup
 
@@ -276,6 +300,7 @@ ls -la /opt/n8n-backups/
 ```
 
 The restore script will:
+
 - Stop n8n services
 - Create a safety backup of current state
 - Restore database and files from backup
@@ -302,6 +327,7 @@ The restore script will:
 ## Support
 
 For issues:
+
 1. Check logs: `docker compose logs`
 2. Review this documentation
 3. Check [n8n documentation](https://docs.n8n.io)
