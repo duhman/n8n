@@ -1,0 +1,10 @@
+# File References in Rules
+
+- Use `[filename.ext](mdc:filename.ext)` to reference files in rules.
+- Paths should be relative to the workspace root.
+- Example: `[index.ts](mdc:n8n-mcp-server/src/index.ts)` references the backend entry point.
+  description:
+  globs:
+  alwaysApply: false
+
+---

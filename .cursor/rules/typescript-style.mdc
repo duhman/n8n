@@ -1,0 +1,25 @@
+# TypeScript Style Guide
+
+- **Always use explicit types for function parameters and return values.**
+- **Prefer `const` over `let` for variables that are not reassigned.**
+- **Use semicolons at the end of statements.**
+- **Use interfaces for object shapes when possible.**
+- **Avoid using `any` unless absolutely necessary.**
+
+```typescript
+// ✅ DO: Use explicit types
+function add(a: number, b: number): number {
+	return a + b;
+}
+
+// ❌ DON'T: Use implicit any
+function add(a, b) {
+	return a + b;
+}
+```
+
+description:
+globs:
+alwaysApply: false
+
+---

@@ -1,0 +1,14 @@
+# Project Structure Guide
+
+- The main entry point for the backend server is typically found in [n8n-mcp-server/src/index.ts](mdc:n8n-mcp-server/src/index.ts).
+- Configuration files are located in [n8n-mcp-server/src/config/](mdc:n8n-mcp-server/src/config/).
+- Frontend code is under [packages/frontend/](mdc:packages/frontend/).
+- Workflow and node definitions are in [packages/nodes-base/](mdc:packages/nodes-base/).
+- End-to-end and integration tests are in [cypress/](mdc:cypress/) and [n8n-mcp-server/tests/](mdc:n8n-mcp-server/tests/).
+
+Refer to these locations for main logic, configuration, and tests.
+description:
+globs:
+alwaysApply: false
+
+---
