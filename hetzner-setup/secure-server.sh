@@ -111,11 +111,11 @@ ssl_session_timeout 1d;
 ssl_session_cache shared:SSL:50m;
 ssl_session_tickets off;
 
-# OCSP Stapling
-ssl_stapling on;
-ssl_stapling_verify on;
-resolver 8.8.8.8 8.8.4.4 valid=300s;
-resolver_timeout 5s;
+# OCSP Stapling (only if certificate supports it)
+# ssl_stapling on;
+# ssl_stapling_verify on;
+# resolver 8.8.8.8 8.8.4.4 valid=300s;
+# resolver_timeout 5s;
 
 # Disable preloading HSTS for now
 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
@@ -287,7 +287,14 @@ ClientAliveCountMax 2
 EOF
 
 # Restart SSH service
-systemctl restart sshd
+# Restart SSH service (try both common service names)
+if systemctl is-active --quiet sshd; then
+    systemctl restart sshd
+elif systemctl is-active --quiet ssh; then
+    systemctl restart ssh
+else
+    log "SSH service not found or not running"
+fi
 
 # Set up log rotation
 log "Configuring log rotation..."
