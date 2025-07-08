@@ -299,6 +299,34 @@ Check these regularly:
 
 ## Troubleshooting
 
+### Quick Diagnostic Tools
+
+**502 Bad Gateway Error:**
+```bash
+./troubleshoot-502.sh
+```
+
+**SSL Certificate Issues:**
+```bash
+./troubleshoot-ssl.sh your-domain.com
+```
+
+**SSH Access Problems:**
+```bash
+# Via Hetzner console
+./fix-ssh-access.sh
+```
+
+**System Health Check:**
+```bash
+./check-security-status.sh
+```
+
+**Multi-User Verification:**
+```bash
+./verify-multiuser-setup.sh
+```
+
 ### Multi-User Issues
 
 **Problem: Users cannot be invited**

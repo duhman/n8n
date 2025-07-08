@@ -2,6 +2,14 @@
 
 This directory contains a production-ready Docker Compose setup for n8n with PostgreSQL as the database backend.
 
+## 🚀 Currently in Production
+
+✅ **Live Instance**: https://n8n.whatisspeed.com  
+✅ **Version**: n8n 1.102.0  
+✅ **Infrastructure**: Hetzner Cloud VPS  
+✅ **Database**: PostgreSQL 16  
+✅ **Security**: SSL/TLS, Multi-user enabled  
+
 ## Prerequisites
 
 - Docker and Docker Compose installed
