@@ -67,7 +67,7 @@ if [ ! -f ".env" ]; then
     
     # Update .env file with generated values
     sed -i "s/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$POSTGRES_PASSWORD/" .env
-    sed -i "s/N8N_ENCRYPTION_KEY=.*/N8N_ENCRYPTION_KEY=$POSTGRES_PASSWORD/" .env
+    sed -i "s/N8N_ENCRYPTION_KEY=.*/N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY/" .env
     
     info "Generated secure passwords and encryption key"
     
@@ -79,16 +79,21 @@ if [ ! -f ".env" ]; then
     sed -i "s/N8N_HOST=.*/N8N_HOST=$DOMAIN_NAME/" .env
     sed -i "s|WEBHOOK_URL=.*|WEBHOOK_URL=https://$DOMAIN_NAME/|" .env
     
-    # Email configuration
+    # Multi-user configuration
     echo ""
-    read -p "Do you want to configure email settings? (y/n): " CONFIGURE_EMAIL
+    echo -e "${BLUE}Multi-User Configuration${NC}"
+    echo "For a multi-user n8n instance, SMTP configuration is highly recommended."
+    echo "This enables user invitations, password resets, and notifications."
+    echo ""
+    read -p "Do you want to configure email settings for multi-user access? (y/n): " CONFIGURE_EMAIL
     if [[ "$CONFIGURE_EMAIL" =~ ^[Yy]$ ]]; then
-        read -p "SMTP Host: " SMTP_HOST
-        read -p "SMTP Port (usually 587 or 465): " SMTP_PORT
-        read -p "SMTP Username: " SMTP_USER
-        read -s -p "SMTP Password: " SMTP_PASS
+        read -p "SMTP Host (e.g., smtp.gmail.com, smtp.sendgrid.net): " SMTP_HOST
+        read -p "SMTP Port (usually 587 for TLS, 465 for SSL): " SMTP_PORT
+        read -p "SMTP Username/Email: " SMTP_USER
+        read -s -p "SMTP Password/API Key: " SMTP_PASS
         echo ""
         read -p "Default sender email: " DEFAULT_EMAIL
+        read -p "Sender name (e.g., n8n Automation): " SENDER_NAME
         
         # Update .env with email settings
         sed -i "s/N8N_EMAIL_MODE=.*/N8N_EMAIL_MODE=smtp/" .env
@@ -97,7 +102,33 @@ if [ ! -f ".env" ]; then
         sed -i "s/N8N_SMTP_USER=.*/N8N_SMTP_USER=$SMTP_USER/" .env
         sed -i "s/N8N_SMTP_PASS=.*/N8N_SMTP_PASS=$SMTP_PASS/" .env
         sed -i "s/N8N_DEFAULT_EMAIL=.*/N8N_DEFAULT_EMAIL=$DEFAULT_EMAIL/" .env
+        sed -i "s/N8N_SMTP_SENDER_NAME=.*/N8N_SMTP_SENDER_NAME=$SENDER_NAME/" .env
+        sed -i "s/N8N_SMTP_SSL=.*/N8N_SMTP_SSL=true/" .env
+        
+        info "Email configured! You can now invite users and send password resets."
+    else
+        warning "Email not configured. User management will be limited."
+        warning "You can configure email later by editing the .env file."
     fi
+    
+    # Additional multi-user settings
+    echo ""
+    echo -e "${BLUE}Additional Settings${NC}"
+    
+    # Ensure user management is enabled
+    sed -i "s/N8N_USER_MANAGEMENT_DISABLED=.*/N8N_USER_MANAGEMENT_DISABLED=false/" .env
+    
+    # Enable metrics and performance settings
+    sed -i "s/N8N_METRICS=.*/N8N_METRICS=true/" .env
+    sed -i "s/N8N_CONCURRENCY_PRODUCTION=.*/N8N_CONCURRENCY_PRODUCTION=10/" .env
+    
+    # Enable community packages
+    sed -i "s/N8N_COMMUNITY_PACKAGES_ENABLED=.*/N8N_COMMUNITY_PACKAGES_ENABLED=true/" .env
+    
+    # Enable templates
+    sed -i "s/N8N_TEMPLATES_ENABLED=.*/N8N_TEMPLATES_ENABLED=true/" .env
+    
+    info "Multi-user features enabled: user management, metrics, community packages, templates"
 else
     log ".env file already exists, using existing configuration"
     # Extract domain from existing .env
@@ -251,11 +282,26 @@ echo "==================================="
 echo "Next Steps:"
 echo "==================================="
 echo "1. Configure DNS: Point $DOMAIN_NAME to $(curl -s ifconfig.me)"
-echo "2. Once DNS is propagated, run: certbot --nginx -d $DOMAIN_NAME"
+echo "2. Once DNS is propagated, run: ./secure-server.sh"
 echo "3. Access n8n at: http://$(curl -s ifconfig.me):5678"
 echo "   (or https://$DOMAIN_NAME after SSL setup)"
 echo "4. Set up your first admin user in n8n"
-echo "5. Run backup-setup.sh to configure automated backups"
+echo "5. Invite additional users via the n8n interface"
+echo "6. Run ./backup-setup.sh to configure automated backups"
+echo ""
+echo "==================================="
+echo "Multi-User Access:"
+echo "==================================="
+if [[ "$CONFIGURE_EMAIL" =~ ^[Yy]$ ]]; then
+    echo "✓ Email configured - you can invite users"
+    echo "✓ Password resets enabled"
+else
+    echo "⚠ Email not configured - limited user management"
+fi
+echo "✓ User management enabled"
+echo "✓ Community packages enabled"
+echo "✓ Templates enabled"
+echo "✓ Performance optimized for multi-user"
 echo ""
 echo "==================================="
 echo "Important Information:"
@@ -263,11 +309,15 @@ echo "==================================="
 echo "n8n directory: $N8N_DIR"
 echo "Production config: $PRODUCTION_DIR"
 echo "Data directory: $PRODUCTION_DIR/data"
+echo "Environment file: $PRODUCTION_DIR/.env"
 echo "Logs: docker compose logs -f"
 echo ""
-echo "Encryption key has been generated and saved."
-echo "KEEP YOUR .env FILE SECURE!"
-echo "==================================="
+echo "Security Notes:"
+echo "• Encryption key has been generated and saved"
+echo "• KEEP YOUR .env FILE SECURE!"
+echo "• Only the first user becomes admin"
+echo "• Additional users must be invited by admin"
+echo "===================================="
 
 # Save deployment info
 cat > "$N8N_DIR/deployment-info.txt" << EOF

@@ -1,6 +1,20 @@
 # n8n Hetzner Cloud Deployment Guide
 
-This guide provides a complete, production-ready deployment of n8n on Hetzner Cloud with automated setup scripts, security hardening, SSL certificates, and automated backups.
+This guide provides a complete, production-ready deployment of **n8n 1.102.0** on Hetzner Cloud with automated setup scripts, **multi-user support**, security hardening, SSL certificates, and automated backups.
+
+## New in Version 1.102.0
+
+✨ **Multi-User Features:**
+- Enhanced user management and invitation system
+- Improved SMTP configuration for user notifications
+- Better performance optimization for multiple concurrent users
+- Advanced permission and role management
+- Streamlined onboarding for team collaboration
+
+✨ **Performance Improvements:**
+- Task runners enabled by default for better scalability
+- Optimized concurrency settings for production workloads
+- Enhanced metrics and monitoring capabilities
 
 ## Prerequisites
 
@@ -43,7 +57,7 @@ chmod +x *.sh
 # Run initial server setup
 ./initial-setup.sh
 
-# Deploy n8n
+# Deploy n8n with multi-user configuration
 ./deploy-n8n.sh
 
 # After DNS is configured, secure the server
@@ -51,6 +65,9 @@ chmod +x *.sh
 
 # Set up automated backups
 ./backup-setup.sh
+
+# Verify multi-user setup (optional)
+./verify-multiuser-setup.sh
 ```
 
 ## Detailed Setup Steps
@@ -79,10 +96,12 @@ The `initial-setup.sh` script performs:
 
 The `deploy-n8n.sh` script:
 
-- Clones your n8n repository
-- Sets up production configuration
+- Clones your n8n repository (version 1.102.0)
+- Sets up production configuration optimized for multi-user access
 - Generates secure passwords and encryption keys
-- Configures Nginx reverse proxy
+- Configures SMTP for user invitations and notifications
+- Enables performance features (task runners, metrics, community packages)
+- Configures Nginx reverse proxy with appropriate rate limiting
 - Starts n8n with Docker Compose
 - Creates systemd service for auto-start
 
@@ -95,7 +114,11 @@ The `deploy-n8n.sh` script:
 You'll be prompted for:
 
 - Domain name (e.g., n8n.yourdomain.com)
-- Email configuration (optional)
+- **SMTP configuration (highly recommended for multi-user setups)**
+  - SMTP host (Gmail, SendGrid, etc.)
+  - SMTP credentials
+  - Sender email and name
+- Additional multi-user optimizations are configured automatically
 
 ### Step 3: Configure DNS
 
@@ -157,8 +180,31 @@ Choose backup destination:
 ### Access n8n
 
 1. Open browser to `https://your-domain.com`
-2. Create your first admin user
-3. Start building workflows!
+2. **Create your first admin user account**
+3. **Configure additional users:**
+   - Go to Settings → Users
+   - Invite team members via email (if SMTP configured)
+   - Set appropriate roles and permissions
+4. Start building workflows!
+
+### Multi-User Management
+
+**User Invitation Process:**
+1. Admin navigates to Settings → Users
+2. Click "Invite User" and enter email address
+3. User receives invitation email with setup link
+4. User creates account and gains access based on assigned role
+
+**User Roles:**
+- **Owner**: Full administrative access
+- **Admin**: User management and workflow access
+- **Member**: Workflow creation and execution
+- **Viewer**: Read-only access to workflows
+
+**Without SMTP Configuration:**
+- Manual user creation by sharing credentials
+- No email notifications or password resets
+- Limited user onboarding experience
 
 ### Important Commands
 
@@ -176,6 +222,9 @@ docker compose -f /opt/n8n/n8n-production/docker-compose.yml down
 
 # Start n8n
 docker compose -f /opt/n8n/n8n-production/docker-compose.yml up -d
+
+# Verify multi-user setup
+/opt/setup/hetzner-setup/verify-multiuser-setup.sh
 ```
 
 **Backup Management:**
@@ -216,8 +265,8 @@ apt update && apt upgrade
 cd /opt/setup/hetzner-setup
 ./check-n8n-version.sh
 
-# Update n8n to specific version (e.g., 1.100.1)
-./update-n8n.sh 1.100.1
+# Update n8n to specific version (e.g., 1.102.0)
+./update-n8n.sh 1.102.0
 
 # Or update to latest version
 ./update-n8n.sh latest
@@ -249,6 +298,54 @@ Check these regularly:
 - Logs: `tail -f /var/log/nginx/n8n_error.log`
 
 ## Troubleshooting
+
+### Multi-User Issues
+
+**Problem: Users cannot be invited**
+
+1. Check SMTP configuration:
+   ```bash
+   grep N8N_EMAIL_MODE /opt/n8n/n8n-production/.env
+   ```
+
+2. Verify email credentials:
+   ```bash
+   # Check SMTP settings
+   grep N8N_SMTP /opt/n8n/n8n-production/.env
+   ```
+
+3. Test email functionality:
+   ```bash
+   # Check n8n logs for email errors
+   docker compose -f /opt/n8n/n8n-production/docker-compose.yml logs n8n | grep -i smtp
+   ```
+
+**Problem: Users getting rate-limited**
+
+1. Check current rate limits:
+   ```bash
+   grep limit_req /etc/nginx/sites-available/n8n
+   ```
+
+2. Adjust if needed for your team size:
+   ```bash
+   # Edit rate limiting in nginx config
+   nano /etc/nginx/sites-available/n8n
+   # Then reload: nginx -s reload
+   ```
+
+**Problem: User management disabled**
+
+1. Check user management setting:
+   ```bash
+   grep N8N_USER_MANAGEMENT_DISABLED /opt/n8n/n8n-production/.env
+   ```
+
+2. Ensure it's set to false:
+   ```bash
+   sed -i 's/N8N_USER_MANAGEMENT_DISABLED=true/N8N_USER_MANAGEMENT_DISABLED=false/' /opt/n8n/n8n-production/.env
+   docker compose -f /opt/n8n/n8n-production/docker-compose.yml restart
+   ```
 
 ### n8n Not Accessible
 

@@ -34,7 +34,7 @@ info() {
 N8N_DIR="/opt/n8n"
 PRODUCTION_DIR="$N8N_DIR/n8n-production"
 BACKUP_DIR="/opt/n8n-backups"
-TARGET_VERSION="${1:-1.100.1}"  # Default to 1.100.1 if no version specified
+TARGET_VERSION="${1:-1.102.0}"  # Default to 1.102.0 if no version specified
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then

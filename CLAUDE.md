@@ -288,6 +288,7 @@ curl -X GET https://n8n.whatisspeed.com/api/v1/workflows \
 ### Common API Operations
 
 **Workflow Management:**
+
 - `GET /api/v1/workflows` - List all workflows
 - `POST /api/v1/workflows` - Create new workflow
 - `PUT /api/v1/workflows/{id}` - Update workflow
@@ -295,10 +296,12 @@ curl -X GET https://n8n.whatisspeed.com/api/v1/workflows \
 - `POST /api/v1/workflows/{id}/execute` - Execute workflow
 
 **Credentials Management:**
+
 - `GET /api/v1/credentials` - List credentials
 - `POST /api/v1/credentials` - Create credential
 
 **Executions:**
+
 - `GET /api/v1/executions` - List executions
 - `GET /api/v1/executions/{id}` - Get execution details
 
@@ -321,11 +324,11 @@ class N8nAPI:
             "X-N8N-API-KEY": api_key,
             "Content-Type": "application/json"
         }
-    
+
     def list_workflows(self):
         response = requests.get(f"{self.base_url}/api/v1/workflows", headers=self.headers)
         return response.json()
-    
+
     def execute_workflow(self, workflow_id, data=None):
         url = f"{self.base_url}/api/v1/workflows/{workflow_id}/execute"
         response = requests.post(url, headers=self.headers, json=data or {})
@@ -401,6 +404,7 @@ A complete project synchronization system has been implemented in `/linear-notio
 ### Database Schema
 
 The Notion database includes:
+
 - Project tracking fields (Title, Status, Priority, Assignee)
 - Linear integration fields (Linear ID, URL, External ID)
 - Sync management fields (Last Sync, Progress calculation)
@@ -409,6 +413,7 @@ The Notion database includes:
 ### Usage
 
 After setup, the system provides:
+
 - Instant reflection of Linear changes in Notion
 - Progress tracking with calculated completion percentages
 - Bidirectional updates maintaining data consistency

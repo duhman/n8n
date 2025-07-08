@@ -44,10 +44,56 @@ else
     read -p "Enter your domain name (e.g., n8n.yourdomain.com): " DOMAIN_NAME
 fi
 
+# Create temporary HTTP-only nginx configuration for SSL certificate generation
+log "Creating temporary HTTP-only nginx configuration..."
+cat > /etc/nginx/sites-available/n8n << EOF
+# Temporary HTTP-only configuration for Let's Encrypt
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN_NAME;
+    
+    # Let's Encrypt verification
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    
+    # Proxy to n8n for initial setup
+    location / {
+        proxy_pass http://localhost:5678;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+}
+EOF
+
+# Test and reload nginx with temporary config
+nginx -t && systemctl reload nginx
+
+# Create certbot directory
+mkdir -p /var/www/certbot
+
 # SSL Certificate Setup
 log "Setting up SSL certificate with Let's Encrypt..."
 if [ ! -d "/etc/letsencrypt/live/$DOMAIN_NAME" ]; then
-    certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --redirect
+    log "Generating SSL certificate for $DOMAIN_NAME..."
+    if certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --redirect; then
+        log "SSL certificate generated successfully!"
+    else
+        error "Failed to generate SSL certificate. Please check that:"
+        error "1. Domain $DOMAIN_NAME points to this server's IP address"
+        error "2. Port 80 is open and accessible from the internet"
+        error "3. No other web server is running on port 80"
+        error "You can check DNS with: nslookup $DOMAIN_NAME"
+    fi
 else
     log "SSL certificate already exists for $DOMAIN_NAME"
 fi
@@ -75,10 +121,16 @@ resolver_timeout 5s;
 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
 EOF
 
+# Verify SSL certificate exists before creating full configuration
+if [ ! -d "/etc/letsencrypt/live/$DOMAIN_NAME" ]; then
+    error "SSL certificate not found. Cannot proceed with HTTPS configuration."
+fi
+
 # Update Nginx configuration with enhanced security
+log "Creating full nginx configuration with SSL..."
 cat > /etc/nginx/sites-available/n8n << EOF
-# Rate limiting
-limit_req_zone \$binary_remote_addr zone=n8n_limit:10m rate=10r/s;
+# Rate limiting (relaxed for multi-user environments)
+limit_req_zone \$binary_remote_addr zone=n8n_limit:10m rate=30r/s;
 limit_conn_zone \$binary_remote_addr zone=n8n_conn:10m;
 
 # Upstream configuration
@@ -122,9 +174,9 @@ server {
     add_header Content-Security-Policy "default-src 'self' http: https: ws: wss: data: blob: 'unsafe-inline' 'unsafe-eval';" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     
-    # Rate limiting
-    limit_req zone=n8n_limit burst=20 nodelay;
-    limit_conn n8n_conn 10;
+    # Rate limiting (allows bursts for legitimate multi-user activity)
+    limit_req zone=n8n_limit burst=50 nodelay;
+    limit_conn n8n_conn 25;
     
     # Proxy settings
     client_max_body_size 100M;
@@ -160,9 +212,7 @@ server {
 # Default server to catch all other requests
 server {
     listen 80 default_server;
-    listen 443 ssl default_server;
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem;
+    server_name _;
     return 444;
 }
 EOF
@@ -185,8 +235,8 @@ enabled = true
 port = http,https
 filter = n8n-auth
 logpath = /var/log/nginx/n8n_access.log
-maxretry = 5
-bantime = 3600
+maxretry = 8
+bantime = 1800
 findtime = 600
 
 [nginx-limit-req]
@@ -353,6 +403,17 @@ echo "SSL params: /etc/nginx/snippets/ssl-params.conf"
 echo "Fail2ban config: /etc/fail2ban/jail.d/n8n.conf"
 echo "Audit rules: /etc/audit/rules.d/n8n.rules"
 echo "Security check: /usr/local/bin/n8n-security-check.sh"
+echo "==================================="
+
+echo ""
+echo "==================================="
+echo "Multi-User Access Notes:"
+echo "==================================="
+echo "• Rate limiting set to 30 req/s with 50 burst allowance"
+echo "• Fail2ban allows 8 login attempts before 30min ban"
+echo "• Connection limit set to 25 concurrent per IP"
+echo "• These settings balance security with usability"
+echo "• Adjust in /etc/nginx/sites-available/n8n if needed"
 echo "==================================="
 
 log "Server security hardening completed!"

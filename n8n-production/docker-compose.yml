@@ -28,7 +28,7 @@ services:
           memory: 512M
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    image: docker.n8n.io/n8nio/n8n:1.102.0
     restart: unless-stopped
     environment:
       # Database Configuration
