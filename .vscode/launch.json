@@ -9,7 +9,9 @@
 			"request": "launch",
 			"name": "Jest: current file",
 			"program": "${workspaceFolder}/node_modules/.bin/jest",
-			"args": ["${fileBasenameNoExtension}"],
+			"args": [
+				"${fileBasenameNoExtension}"
+			],
 			"console": "integratedTerminal",
 			"windows": {
 				"program": "${workspaceFolder}/node_modules/jest/bin/jest"
@@ -19,20 +21,21 @@
 			"name": "Attach to running n8n",
 			"processId": "${command:PickProcess}",
 			"request": "attach",
-			"skipFiles": ["<node_internals>/**"],
+			"skipFiles": [
+				"<node_internals>/**"
+			],
 			"type": "node"
 		},
 		{
 			"name": "Launch n8n with debug",
 			"program": "${workspaceFolder}/packages/cli/bin/n8n",
 			"cwd": "${workspaceFolder}/packages/cli/bin",
-			// "args": ["start", "--tunnel"],
 			"request": "launch",
-			"skipFiles": ["<node_internals>/**"],
+			"skipFiles": [
+				"<node_internals>/**"
+			],
 			"type": "node",
-			"env": {
-				// "N8N_PORT": "5679",
-			},
+			"env": {},
 			"outputCapture": "std",
 			"killBehavior": "polite"
 		},
@@ -40,12 +43,19 @@
 			"name": "Launch n8n CLI dev with debug",
 			"runtimeExecutable": "pnpm",
 			"cwd": "${workspaceFolder}/packages/cli",
-			"runtimeArgs": ["run", "buildAndDev", "--", "--inspect-brk"],
+			"runtimeArgs": [
+				"run",
+				"buildAndDev",
+				"--",
+				"--inspect-brk"
+			],
 			"console": "integratedTerminal",
 			"restart": true,
 			"autoAttachChildProcesses": true,
 			"request": "launch",
-			"skipFiles": ["<node_internals>/**"],
+			"skipFiles": [
+				"<node_internals>/**"
+			],
 			"type": "node",
 			"envFile": "${workspaceFolder}/.env",
 			"outputCapture": "std",
@@ -58,11 +68,59 @@
 			"args": [
 				"run",
 				"test"
-				// "--",
-				// "ActiveExecutions"
 			],
 			"type": "node",
 			"request": "launch"
+		},
+		{
+			"type": "pwa-msedge",
+			"name": "Launch Microsoft Edge",
+			"request": "launch",
+			"runtimeArgs": [
+				"--remote-debugging-port=9222"
+			],
+			"url": "/Users/marten/.vscode-insiders/extensions/ms-edgedevtools.vscode-edge-devtools-2.1.9/out/startpage/index.html", // Provide your project's url to finish configuring
+			"presentation": {
+				"hidden": true
+			}
+		},
+		{
+			"type": "pwa-msedge",
+			"name": "Launch Microsoft Edge in headless mode",
+			"request": "launch",
+			"runtimeArgs": [
+				"--headless",
+				"--remote-debugging-port=9222"
+			],
+			"url": "/Users/marten/.vscode-insiders/extensions/ms-edgedevtools.vscode-edge-devtools-2.1.9/out/startpage/index.html", // Provide your project's url to finish configuring
+			"presentation": {
+				"hidden": true
+			}
+		},
+		{
+			"type": "vscode-edge-devtools.debug",
+			"name": "Open Edge DevTools",
+			"request": "attach",
+			"url": "/Users/marten/.vscode-insiders/extensions/ms-edgedevtools.vscode-edge-devtools-2.1.9/out/startpage/index.html", // Provide your project's url to finish configuring
+			"presentation": {
+				"hidden": true
+			}
+		}
+	],
+	"compounds": [
+		{
+			"name": "Launch Edge Headless and attach DevTools",
+			"configurations": [
+				"Launch Microsoft Edge in headless mode",
+				"Open Edge DevTools"
+			]
+		},
+		{
+			"name": "Launch Edge and attach DevTools",
+			"configurations": [
+				"Launch Microsoft Edge",
+				"Open Edge DevTools"
+			]
 		}
 	]
 
